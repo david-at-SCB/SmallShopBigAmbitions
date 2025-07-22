@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -42,7 +41,7 @@ namespace LoggerMonadPlayground
         {
             Value = value;
             Strategy = strategy;
-            Logs = logs ?? new List<string>();
+            Logs = logs ?? [];
         }
 
         public IMonad<U> Bind<U>(Func<T, IMonad<U>> func)

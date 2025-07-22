@@ -1,7 +1,20 @@
+using OpenTelemetry.Trace; // Ensure this namespace is included
+using OpenTelemetry.Resources; // Ensure this namespace is included
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
+
+//// Fix: Use the correct extension method for OpenTelemetry configuration
+//builder.Services.ConfigureOpenTelemetryTracerProvider(tracerProviderBuilder =>
+//{
+//    tracerProviderBuilder
+//        .AddSource("MyApp.Telemetry")
+//        .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("MyApp"))
+//        .AddConsoleExporter() // For debugging
+//        .AddOtlpExporter();   // Sends to OTLP collector (e.g., OpenTelemetry Collector)
+//});
 
 var app = builder.Build();
 
