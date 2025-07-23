@@ -5,15 +5,15 @@ using System.Net.Http.Metrics;
 
 
 namespace SmallShopBigAmbitions.Services;
-public record EnrichedCustomerProfile(string Profile, string Name, string Badge, string Extra);
+//public record EnrichedCustomerProfile(string Profile, string Name, string Badge, string Extra);
 
-public interface IMockDatabase
-{
-    IO<Customer> GetUser();
-    IO<string> GetUserProfile(Customer user);
-    IO<string> GetUserProfileBadge(Customer user);
-    IO<string> GetMoreUserStuff(Customer user);
-}
+//public interface IMockDatabase
+//{
+//    IO<Customer> GetUser();
+//    IO<string> GetUserProfile(Customer user);
+//    IO<string> GetUserProfileBadge(Customer user);
+//    IO<string> GetMoreUserStuff(Customer user);
+//}
 
 public class CustomerService
 {

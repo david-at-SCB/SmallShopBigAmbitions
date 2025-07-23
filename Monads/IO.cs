@@ -17,4 +17,8 @@ public record class IO<T>(Func<T> Effect)
             action(result);
             return result;
         });
+
+    public static IO<Task<TResult>> FromTask<TResult>(Func<Task<TResult>> taskFactory) =>
+        new(() => taskFactory());
+
 }

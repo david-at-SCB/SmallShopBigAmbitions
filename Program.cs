@@ -1,20 +1,25 @@
+using OpenTelemetry.Extensions.Hosting; // Ensure this namespace is included
 using OpenTelemetry.Trace; // Ensure this namespace is included
 using OpenTelemetry.Resources; // Ensure this namespace is included
+using SmallShopBigAmbitions.Logic_examples; // Ensure this namespace is included
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add OpenTelemetry tracing
+builder.Services.AeddOpenTelemetryTracing(tracerProviderBuilder =>
+{
+    tracerProviderBuilder
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddSource("MyApp.Tracer") // Replace with your tracer source name
+        .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("SmallShopBigAmbitions"))
+        .AddConsoleExporter(); // Export traces to the console
+});
 
 // Add services to the container.
 builder.Services.AddRazorPages();
 
-//// Fix: Use the correct extension method for OpenTelemetry configuration
-//builder.Services.ConfigureOpenTelemetryTracerProvider(tracerProviderBuilder =>
-//{
-//    tracerProviderBuilder
-//        .AddSource("MyApp.Telemetry")
-//        .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("MyApp"))
-//        .AddConsoleExporter() // For debugging
-//        .AddOtlpExporter();   // Sends to OTLP collector (e.g., OpenTelemetry Collector)
-//});
+builder.Services.AddTransient<TraceableIOLoggerExample>();
 
 var app = builder.Build();
 
