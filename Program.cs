@@ -1,12 +1,18 @@
+global using LanguageExt;
+global using LanguageExt.Common;
+global using static LanguageExt.Prelude;
+global using LanguageExt.Pipes;
+
 using OpenTelemetry.Extensions.Hosting; // Ensure this namespace is included
 using OpenTelemetry.Trace; // Ensure this namespace is included
 using OpenTelemetry.Resources; // Ensure this namespace is included
 using SmallShopBigAmbitions.Logic_examples; // Ensure this namespace is included
 
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add OpenTelemetry tracing
-builder.Services.AeddOpenTelemetryTracing(tracerProviderBuilder =>
+builder.Services.AddOpenTelemetryTracing(tracerProviderBuilder =>
 {
     tracerProviderBuilder
         .AddAspNetCoreInstrumentation()

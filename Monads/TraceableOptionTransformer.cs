@@ -1,53 +1,57 @@
-﻿using LanguageExt;
-using LanguageExt.Common;
-using System.Diagnostics;
-using OpenTelemetry.Trace;
-
-namespace SmallShopBigAmbitions.Monads;
+﻿using SmallShopBigAmbitions.Monads;
 
 public readonly struct TraceableOptionT<T>
 {
-    private readonly Traceable<Result<Option<T>>> _traceable;
+    private readonly Traceable<Fin<Option<T>>> _traceable;
 
-    public TraceableOptionT(Traceable<Result<Option<T>>> traceable) =>
+    public TraceableOptionT(Traceable<Fin<Option<T>>> traceable) =>
         _traceable = traceable;
 
-    public async Task<TraceableOptionT<U>> BindAsync<U>(Func<T, Task<TraceableOptionT<U>>> f)
+    public TraceableOptionT<U> Bind<U>(Func<T, TraceableOptionT<U>> f)
     {
-        var result = await _traceable.RunTraceableAsync();
+        var traceable = _traceable; // capture the field, cant access instance '_traceable' in an anonymous lambda
 
-        return await result.Match(
-            Succ: async opt =>
-                await opt.Match(
-                    Some: async val => await f(val),
-                    None: () => Task.FromResult(TraceableOptionT<U>.None("none"))
-                ),
-            Fail: err => Task.FromResult(TraceableOptionT<U>.Fail(err, "fail"))
+        return new TraceableOptionT<U>(
+            new Traceable<Fin<Option<U>>>(() =>
+            {
+                var result = traceable.RunTraceable();
+                return result.Match(
+                    Succ: opt => opt.Match(
+                        Some: val => f(val)._traceable.RunTraceable(),
+                        None: () => Fin<Option<U>>.Succ(Option<U>.None)
+                    ),
+                    Fail: err => Fin<Option<U>>.Fail(err)
+                );
+            }, _traceable.SpanName)
         );
     }
 
-    public async Task<TraceableOptionT<U>> MapAsync<U>(Func<T, U> f, string spanName = "map")
+    public TraceableOptionT<U> Map<U>(Func<T, U> f, string spanName = "map")
     {
-        var result = await _traceable.RunTraceableAsync();
-        var mapped = result.Map(opt => opt.Map(f));
-        return new TraceableOptionT<U>(new Traceable<Result<Option<U>>>(() => Task.FromResult(mapped), spanName));
+        var traceable = _traceable;  // capture the field, cant access instance '_traceable' in an anonymous lambda
+        return new(new Traceable<Fin<Option<U>>>(() =>
+        {
+            var result = traceable.RunTraceable();
+            return result.Map(opt => opt.Map(f));
+        }, spanName));
     }
 
-    public Task<Result<Option<T>>> RunAsync() => _traceable.RunTraceableAsync();
+    public Fin<Option<T>> Run() => _traceable.RunTraceable();
 
-    public static TraceableOptionT<T> Lift(Traceable<Result<Option<T>>> traceable) =>
+    public static TraceableOptionT<T> Lift(Traceable<Fin<Option<T>>> traceable) =>
         new(traceable);
-
     public static TraceableOptionT<T> Some(T value, string spanName) =>
-        new(new Traceable<Result<Option<T>>>(() => Task.FromResult(new Result<Option<T>>(Prelude.Some(value))), spanName));
+        new(new Traceable<Fin<Option<T>>>(() =>
+            Fin<Option<T>>.Succ(Option<T>.Some(value)), spanName));
 
     public static TraceableOptionT<T> None(string spanName) =>
-        new(new Traceable<Result<Option<T>>>(() => Task.FromResult(new Result<Option<T>>(Option<T>.None)), spanName));
+        new(new Traceable<Fin<Option<T>>>(() =>
+            Fin<Option<T>>.Succ(Option<T>.None), spanName));
 
     public static TraceableOptionT<T> Fail(Error error, string spanName) =>
-        new(new Traceable<Result<Option<T>>>(() => Task.FromResult(new Result<Option<T>>(error)), spanName));
+        new(new Traceable<Fin<Option<T>>>(() =>
+            Fin<Option<T>>.Fail(error), spanName));
 
     public TraceableOptionT<T> WithLogging(ILogger logger) =>
         new(_traceable.WithLogging(logger));
-
 }

@@ -1,10 +1,3 @@
-using LanguageExt;
-using LanguageExt.ClassInstances.Pred;
-using LanguageExt.Common;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
 namespace SmallShopBigAmbitions.Monads;
 
 public static class TraceableAttributes
@@ -51,6 +44,25 @@ public static class TraceableAttributes
             Fail: _ => Enumerable.Empty<KeyValuePair<string, object>>()
         );
     }
+
+    // old and wrong. but why?
+    //public static Func<Fin<T>> FromResultSeq<T>(
+    //    Func<Aff<Fin<Seq<T>>>, IEnumerable<KeyValuePair<string, object>>> function)
+    //{
+    //    return result => result.Match( // => gives error CS1593 
+    //        Succ: value => [new KeyValuePair<string, object>(function, ConvertToOtelType(value))],
+    //        Fail: _ => Enumerable.Empty<KeyValuePair<string, object>>());
+    //}
+    public static Func<Fin<Seq<T>>, IEnumerable<KeyValuePair<string, object>>> FromResultSeq<T>(
+    Func<Seq<T>, IEnumerable<KeyValuePair<string, object>>> inner)
+    {
+        return result => result.Match(
+            Succ: value => inner(value),
+            Fail: _ => Enumerable.Empty<KeyValuePair<string, object>>()
+        );
+    }
+
+
 
     public static Func<Fin<T>, IEnumerable<KeyValuePair<string, object>>>? FromResult<T>(
     Func<T, IEnumerable<KeyValuePair<string, object>>>? inner)

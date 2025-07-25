@@ -1,17 +1,21 @@
 ﻿namespace SmallShopBigAmbitions.Monads;
 
+using LanguageExt.Traits;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using static SmallShopBigAmbitions.Logic_examples.TraceableIOLoggerExample;
 
 public record class Traceable<T>(
-    Func<Task<T>> Effect,
+    Func<T> Effect,
     string SpanName,
     Func<T, IEnumerable<KeyValuePair<string, object>>>? Attributes = null)
+    : Monad<Traceable>, K<Monads.Traceable, T>, IMonad<Traceable<T>>, IMonadLifter<Traceable<T>>
+    where T : notnull
 {
-    public async Task<T> RunTraceableAsync()
+    public T RunTraceable()
     {
         using var activity = new Activity(SpanName).Start();
-        var result = await Effect();
+        var result = Effect();
         if (activity != null && Attributes != null)
         {
             foreach (var attr in Attributes(result))
@@ -20,8 +24,14 @@ public record class Traceable<T>(
         return result;
     }
 
-    public Traceable<R> Map<R>(Func<T, R> f) =>
-        new(async () => f(await RunTraceableAsync()), "", null);
+
+    public static Traceable<ResultOpt<string>> FromIOWrapped(IO<Fin<Option<string>>> io, string span, Func<Option<string>, IEnumerable<KeyValuePair<string, object>>>? attrs = null)
+        => new(() =>
+        {
+            var result = io.Run();
+            return new ResultOpt<string>(result);
+        }, span, result => attrs?.Invoke(result.Value.Match(Succ: x => x, Fail: _ => Option<string>.None)));
+
 
     /// Creates a new Traceable monad by applying a function that returns another Traceable monad.
     /// This method ensures that each step in the chain defines its own span and attributes,
@@ -37,16 +47,44 @@ public record class Traceable<T>(
     /// <typeparam name="R"></typeparam>
     /// <param name="f"></param>
     /// <returns></returns>
-    public Traceable<R> Bind<R>(Func<T, Traceable<R>> f) =>
-        new(async () => await f(await RunTraceableAsync()).RunTraceableAsync(), "", null);
-
-    public Traceable<T> Tap(Action<T> action) =>
-        new(async () =>
+    public Traceable<R> Bind<R>(Func<T, Traceable<R>> f)
+    {
+        return new(() =>
         {
-            var result = await RunTraceableAsync();
+            var result = RunTraceable();
+            return f(result).RunTraceable();
+        }, SpanName, null); // return null so the next Traceable can define its own attributes
+    }
+
+    public Traceable<T> Tap(Action<T> action)
+    {
+        return new(() =>
+        {
+            var result = RunTraceable();
             action(result);
             return result;
         }, SpanName, Attributes);
+    }
+
+    public static K<Monads.Traceable, B> Bind<A, B>(K<Monads.Traceable, A> ma, Func<A, K<Monads.Traceable, B>> f)
+    {
+        throw new NotImplementedException();
+    }
+
+    public static K<Monads.Traceable, A> Pure<A>(A value)
+    {
+        throw new NotImplementedException();
+    }
+
+    public static K<Monads.Traceable, B> Apply<A, B>(K<Monads.Traceable, Func<A, B>> mf, K<Monads.Traceable, A> ma)
+    {
+        throw new NotImplementedException();
+    }
+
+    public static K<Monads.Traceable, B> Map<A, B>(Func<A, B> f, K<Monads.Traceable, A> ma)
+    {
+        throw new NotImplementedException();
+    }
 }
 
 public static class TraceableExtensions
@@ -59,9 +97,9 @@ public static class TraceableExtensions
     /// <param name="logger"></param>
     /// <returns></returns>
     public static Traceable<T> WithLogging<T>(this Traceable<T> traceable, Microsoft.Extensions.Logging.ILogger logger) =>
-        new(async () =>
+        new(() =>
         {
-            var result = await traceable.Effect();
+            var result = traceable.Effect();
             logger.LogInformation("Traceable [{Span}]: {@Result}", traceable.SpanName, result);
             return result;
         }, traceable.SpanName, traceable.Attributes);
