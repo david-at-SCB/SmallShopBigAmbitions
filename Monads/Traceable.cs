@@ -9,8 +9,6 @@ public record class Traceable<T>(
     Func<T> Effect,
     string SpanName,
     Func<T, IEnumerable<KeyValuePair<string, object>>>? Attributes = null)
-    : Monad<Traceable>, K<Monads.Traceable, T>, IMonad<Traceable<T>>, IMonadLifter<Traceable<T>>
-    where T : notnull
 {
     public T RunTraceable()
     {
@@ -64,26 +62,6 @@ public record class Traceable<T>(
             action(result);
             return result;
         }, SpanName, Attributes);
-    }
-
-    public static K<Monads.Traceable, B> Bind<A, B>(K<Monads.Traceable, A> ma, Func<A, K<Monads.Traceable, B>> f)
-    {
-        throw new NotImplementedException();
-    }
-
-    public static K<Monads.Traceable, A> Pure<A>(A value)
-    {
-        throw new NotImplementedException();
-    }
-
-    public static K<Monads.Traceable, B> Apply<A, B>(K<Monads.Traceable, Func<A, B>> mf, K<Monads.Traceable, A> ma)
-    {
-        throw new NotImplementedException();
-    }
-
-    public static K<Monads.Traceable, B> Map<A, B>(Func<A, B> f, K<Monads.Traceable, A> ma)
-    {
-        throw new NotImplementedException();
     }
 }
 
