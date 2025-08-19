@@ -1,5 +1,6 @@
 ﻿using SmallShopBigAmbitions.Monads.Traceable;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
+using System.Diagnostics;
 using System.Security.Cryptography;
 
 namespace SmallShopBigAmbitions.Logic_examples;
@@ -100,7 +101,7 @@ public class A_TraceableTExample
             builder.AddConsole(); // Add a console logger provider
         }).CreateLogger("TraceableExample");
 
-        var result = EnrichUserAsyncVersion("id123", logger).Run();
+        var result = EnrichUserAsyncVersion("id123", logger).Run(); // run the IO immediately
 
         if (result.IsSome)
         {
@@ -136,33 +137,20 @@ public class A_TraceableTExample
             TraceableTAttributes.FromFinOption<string>("extra")
         ).WithLogging(logger);
 
-        // Fork each IO to run in parallel
-        var pf = tracedProfile.RunTraceable().Fork();
-        var bf = tracedBadge.RunTraceable().Fork();
-        var ef = tracedExtra.RunTraceable().Fork();
-
-        // Join them before entering LINQ
-        var pIO = pf.Join(); // Join doesnt work without parameters. There is none that takes 0.
-        var bIO = bf.Join();
-        var eIO = ef.Join();
-
-
-        
-return
-        from p in pIO
-        from b in bIO
-        from e in eIO
-        let profileOpt = Flatten(p)
-        let badgeOpt = Flatten(b)
-        let extraOpt = Flatten(e)
-               let enrichedOpt = Map3(profileOpt, badgeOpt, extraOpt,
-                   (profile, badge, extra) => new EnrichedUserProfile(user, profile, badge, extra))
-               select enrichedOpt;
-
-
-
-
-
+        // run the 3 calls in parallel using Fork
+        return
+                from fork1 in tracedProfile.RunTraceable().Fork()
+                from fork2 in tracedBadge.RunTraceable().Fork()
+                from fork3 in tracedExtra.RunTraceable().Fork()
+                from p in fork1.Await // await them separately
+                from b in fork2.Await
+                from e in fork3.Await
+                let profileOpt = Flatten(p) // flatten our result, otherwise we have Fin<Option<T>> and we want Option<T>
+                let badgeOpt = Flatten(b)
+                let extraOpt = Flatten(e)
+                let enrichedOpt = Map3(profileOpt, badgeOpt, extraOpt, // use Map3 to combine the 3 Options into one    
+                    (profile, badge, extra) => new EnrichedUserProfile(user, profile, badge, extra)) // create our enriched profile
+                select enrichedOpt; // return the result
     }
 
     /// <summary>
@@ -176,6 +164,8 @@ return
         Succ: opt => opt,
         Fail: _ => Option<T>.None
     );
+
+
 
     /// <summary>
     /// To avoid the need for a Monad stack, we can use a Map3 function to map over three Option values.

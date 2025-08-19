@@ -14,26 +14,24 @@ using OpenTelemetry.Trace;
 using SmallShopBigAmbitions.Application.Billing;
 using SmallShopBigAmbitions.Logic_examples;
 
-// Add the necessary NuGet package reference for OpenTelemetry.Extensions.Hosting
-// If not already installed, run the following command in your terminal:
-// dotnet add package OpenTelemetry.Extensions.Hosting
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Add OpenTelemetry tracing
-
-const string serviceName = "roll-dice";
-
+var billingServiceName = "SmallShopBigAmbitions.Billing";
+var orderServiceName = "SmallShopBigAmbitions.Order";
+var cartServiceName = "SmallShopBigAmbitions.Cart";
 builder.Logging.AddOpenTelemetry(options =>
 {
     options
         .SetResourceBuilder(
             ResourceBuilder.CreateDefault()
-                .AddService(serviceName))
+                .AddService(billingServiceName))
+        //.AddService(orderServiceName))
+        //.AddService(cartServiceName))
         .AddConsoleExporter();
 });
 builder.Services.AddOpenTelemetry()
-      .ConfigureResource(resource => resource.AddService(serviceName))
+      .ConfigureResource(resource => resource.AddService(billingServiceName))
       .WithTracing(tracing => tracing
           .AddAspNetCoreInstrumentation()
           .AddConsoleExporter())
