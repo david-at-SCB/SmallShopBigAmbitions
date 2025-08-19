@@ -83,8 +83,8 @@ public static class C_ALittleMoreComplexTraceableTExample
                 ActivitySource: TracerIOExample.Source,
                 Attributes: orderId =>
                 [
-                    new KeyValuePair<string, object>("order.id", orderId),
-                    new KeyValuePair<string, object>("order.item.count", items.Count)
+                new KeyValuePair<string, object>("order.id", orderId),
+                new KeyValuePair<string, object>("order.item.count", items.Count)
                 ]
             ).WithLogging(logger);
     }
@@ -155,9 +155,9 @@ return
         let profileOpt = Flatten(p)
         let badgeOpt = Flatten(b)
         let extraOpt = Flatten(e)
-        let enrichedOpt = Map3(profileOpt, badgeOpt, extraOpt,
-            (profile, badge, extra) => new EnrichedUserProfile(user, profile, badge, extra))
-        select enrichedOpt;
+               let enrichedOpt = Map3(profileOpt, badgeOpt, extraOpt,
+                   (profile, badge, extra) => new EnrichedUserProfile(user, profile, badge, extra))
+               select enrichedOpt;
 
 
 
