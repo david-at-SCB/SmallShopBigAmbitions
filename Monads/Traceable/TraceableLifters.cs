@@ -1,6 +1,6 @@
 ﻿using static SmallShopBigAmbitions.Logic_examples.TraceableIOLoggerExample;
 
-namespace SmallShopBigAmbitions.Monads;
+namespace SmallShopBigAmbitions.Monads.Traceable;
 
 /// <summary>
 /// Provides helper methods to lift common functional monads (like Eff, Aff, Option, Fin)
@@ -23,6 +23,7 @@ namespace SmallShopBigAmbitions.Monads;
 /// - Always define a unique span name per operation
 /// - Use TraceableAttributes to attach structured metadata
 /// </summary>
+[Obsolete("Use TraceableTLifts instead. This is class is only used for an example in the Code examples section.")]
 public static class TraceableLifts
 {
     /// <summary>

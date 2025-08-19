@@ -1,4 +1,4 @@
-namespace SmallShopBigAmbitions.Monads;
+namespace SmallShopBigAmbitions.Monads.Traceable;
 
 public static class TraceableAttributes
 {

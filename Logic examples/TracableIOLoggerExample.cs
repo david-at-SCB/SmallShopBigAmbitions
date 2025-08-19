@@ -1,10 +1,36 @@
-﻿using SmallShopBigAmbitions.Monads;
+﻿using Serilog;
+using Serilog.Core;
+using SmallShopBigAmbitions.Monads.Traceable;
 
 namespace SmallShopBigAmbitions.Logic_examples;
 
 public class TraceableIOLoggerExample
 {
-    IO<Option<EnrichedUserProfile>> EnrichUser(string user, ILogger logger)
+    public static void Main(string[] args)
+    {
+        // Instantiate a normal logger instance using LoggerFactory
+        var logger = LoggerFactory.Create(builder =>
+        {
+            builder.AddConsole(); // Add a console logger provider
+        }).CreateLogger("TraceableExample");
+
+        var result = EnrichUser("id123", logger).Run();
+
+        if (result.IsSome)
+        {
+            var enrichedProfile = result.Match(
+                Some: profile => $"User: {profile.User}, Profile: {profile.Profile}, Badge: {profile.Badge}, Extra: {profile.Extra}",
+                None: () => "No enriched profile found"
+            );
+            Console.WriteLine($"Enriched Profile: {enrichedProfile}");
+        }
+        else
+        {
+            Console.WriteLine("No profile found.");
+        }
+    }
+
+    private static IO<Option<EnrichedUserProfile>> EnrichUser(string user, Microsoft.Extensions.Logging.ILogger logger)
     {
         var tracedProfile = TraceableLifts.FromIO(
             MockDb.GetUserProfile(user),
@@ -24,26 +50,15 @@ public class TraceableIOLoggerExample
             TraceableAttributes.FromResultOption<string>("extra")
         ).WithLogging(logger);
 
-        var forkProfile = IO.fork(tracedProfile.RunTraceable());
-        var forkBadge = IO.fork(tracedBadge.RunTraceable());
-        var forkExtra = IO.fork(tracedExtra.RunTraceable());
-
-        return from p in forkProfile.Await
-               from b in forkBadge.Await
-               from e in forkExtra.Await
-               let profileOpt = Flatten(p.Value)
-               let badgeOpt = Flatten(b.Value)
-               let extraOpt = Flatten(e.Value)
+        return from p in IO.lift(() => tracedProfile.RunTraceable())
+               from b in IO.lift(() => tracedBadge.RunTraceable())
+               from e in IO.lift(() => tracedExtra.RunTraceable())
+               let profileOpt = Flatten<string>(p)
+               let badgeOpt = Flatten<string>(b)
+               let extraOpt = Flatten<string>(e)
                let enrichedOpt = Map3(profileOpt, badgeOpt, extraOpt,
                    (profile, badge, extra) => new EnrichedUserProfile(user, profile, badge, extra))
                select enrichedOpt;
-    }
-
-    public class ResultOpt<T>
-    {
-        public Fin<Option<T>> Value { get; }
-
-        public ResultOpt(Fin<Option<T>> value) => Value = value;
     }
 
     /// <summary>
@@ -52,7 +67,7 @@ public class TraceableIOLoggerExample
     /// <typeparam name="T"></typeparam>
     /// <param name="result"></param>
     /// <returns></returns>
-    public static Option<T> Flatten<T>(Fin<Option<T>> result) =>
+    private static Option<T> Flatten<T>(Fin<Option<T>> result) =>
         result.Match(
             Succ: opt => opt,
             Fail: _ => Option<T>.None
@@ -71,7 +86,7 @@ public class TraceableIOLoggerExample
     /// <param name="t"></param>
     /// <param name="function">The function we will apply to all 3 Options with Map. Must be a function/delegate that handles the same types of First, Second, and Third, and that also returns the same </param>
     /// <returns></returns>
-    public static Option<Return> Map3<First, Second, Third, Return>(
+    private static Option<Return> Map3<First, Second, Third, Return>(
       Option<First> f,
       Option<Second> s,
       Option<Third> t,
@@ -80,6 +95,12 @@ public class TraceableIOLoggerExample
         return f.Bind(av =>
                s.Bind(bv =>
                t.Map(cv => function(av, bv, cv))));
+    }
+    public class ResultOpt<T>
+    {
+        public ResultOpt(Fin<Option<T>> value) => Value = value;
+
+        public Fin<Option<T>> Value { get; }
     }
 }
 
@@ -93,22 +114,22 @@ public record EnrichedUserProfile(
 // these should return their own types, not strings.
 internal static partial class MockDb
 {
+    public static IO<Fin<Option<string>>> GetMoreUserStuff(string user) =>
+        IO.lift<Fin<Option<string>>>(() => Fin<Option<string>>.Succ(Some($"Extra info for {user}")));
+
     public static IO<Fin<Option<string>>> GetUser() =>
-        IO.lift(() => Fin<Option<string>>.Succ(Some("Alice")));
+            IO.lift<Fin<Option<string>>>(() => Fin<Option<string>>.Succ(Some("Alice")));
 
     public static IO<Fin<Option<string>>> GetUserProfile(string user) =>
-        IO.lift(() => Fin<Option<string>>.Succ(Some($"Profile of {user}")))
+        IO.lift<Fin<Option<string>>>(() => Fin<Option<string>>.Succ(Some($"Profile of {user}")));
 
-
- public static IO<Fin<Option<string>>> GetUserProfileBadge(string user) =>
-    IO.lift(() => Fin<Option<string>>.Succ(Some($"Badge for {user}")));
-
-    public static IO<Fin<Option<string>>> GetMoreUserStuff(string user) =>
-        IO.lift(() => Fin<Option<string>>.Succ(Some($"Extra info for {user}")));
+    public static IO<Fin<Option<string>>> GetUserProfileBadge(string user) =>
+        IO.lift<Fin<Option<string>>>(() => Fin<Option<string>>.Succ(Some($"Badge for {user}")));
 }
 
 // Example tracer source (replace with your actual tracer)
 internal static class MyTracer
 {
+    // but an ActivitySource is a span in OTEL lingo? Dont we need more than this hardcoded one?
     public static readonly System.Diagnostics.ActivitySource Source = new("SmallShopBigAmbitions.Tracer");
 }

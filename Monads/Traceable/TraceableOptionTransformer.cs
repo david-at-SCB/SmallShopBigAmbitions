@@ -1,5 +1,8 @@
-﻿using SmallShopBigAmbitions.Monads;
+﻿using SmallShopBigAmbitions.Monads.Traceable;
 
+namespace SmallShopBigAmbitions.Monads.Traceable;
+
+[Obsolete("Use TraceableT instead. This monad is only used in logic examples")]
 public readonly struct TraceableOptionT<T>
 {
     private readonly Traceable<Fin<Option<T>>> _traceable;

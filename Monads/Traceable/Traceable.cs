@@ -1,10 +1,12 @@
-﻿namespace SmallShopBigAmbitions.Monads;
+﻿namespace SmallShopBigAmbitions.Monads.Traceable;
 
 using LanguageExt.Traits;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using static SmallShopBigAmbitions.Logic_examples.TraceableIOLoggerExample;
 
+[Obsolete("Use TraceableT instead. This monad is only used in logic examples")]
 public record class Traceable<T>(
     Func<T> Effect,
     string SpanName,
@@ -74,7 +76,7 @@ public static class TraceableExtensions
     /// <param name="traceable"></param>
     /// <param name="logger"></param>
     /// <returns></returns>
-    public static Traceable<T> WithLogging<T>(this Traceable<T> traceable, Microsoft.Extensions.Logging.ILogger logger) =>
+    public static Traceable<T> WithLogging<T>(this Traceable<T> traceable, ILogger logger) =>
         new(() =>
         {
             var result = traceable.Effect();

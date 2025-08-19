@@ -1,31 +1,53 @@
 global using LanguageExt;
 global using LanguageExt.Common;
-global using static LanguageExt.Prelude;
+global using LanguageExt.Effects;
 global using LanguageExt.Pipes;
+global using LanguageExt.Pretty;
+global using LanguageExt.Traits;
+global using LanguageExt.Traits.Domain;
+global using static LanguageExt.Prelude;
+using OpenTelemetry.Extensions.Hosting;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+using SmallShopBigAmbitions.Application.Billing;
+using SmallShopBigAmbitions.Logic_examples;
 
-using OpenTelemetry.Extensions.Hosting; // Ensure this namespace is included
-using OpenTelemetry.Trace; // Ensure this namespace is included
-using OpenTelemetry.Resources; // Ensure this namespace is included
-using SmallShopBigAmbitions.Logic_examples; // Ensure this namespace is included
-
+// Add the necessary NuGet package reference for OpenTelemetry.Extensions.Hosting
+// If not already installed, run the following command in your terminal:
+// dotnet add package OpenTelemetry.Extensions.Hosting
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add OpenTelemetry tracing
-builder.Services.AddOpenTelemetryTracing(tracerProviderBuilder =>
+
+const string serviceName = "roll-dice";
+
+builder.Logging.AddOpenTelemetry(options =>
 {
-    tracerProviderBuilder
-        .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation()
-        .AddSource("MyApp.Tracer") // Replace with your tracer source name
-        .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("SmallShopBigAmbitions"))
-        .AddConsoleExporter(); // Export traces to the console
+    options
+        .SetResourceBuilder(
+            ResourceBuilder.CreateDefault()
+                .AddService(serviceName))
+        .AddConsoleExporter();
 });
+builder.Services.AddOpenTelemetry()
+      .ConfigureResource(resource => resource.AddService(serviceName))
+      .WithTracing(tracing => tracing
+          .AddAspNetCoreInstrumentation()
+          .AddConsoleExporter())
+      .WithMetrics(metrics => metrics
+          .AddAspNetCoreInstrumentation()
+          .AddConsoleExporter());
 
 // Add services to the container.
 builder.Services.AddRazorPages();
 
 builder.Services.AddTransient<TraceableIOLoggerExample>();
+builder.Services.AddMediatR(cfg =>
+    cfg.RegisterServicesFromAssemblyContaining<ChargeCustomerHandler>());
+
 
 var app = builder.Build();
 

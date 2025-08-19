@@ -1,6 +1,6 @@
 ﻿using LanguageExt;
 using static LanguageExt.Prelude;
-using LanguageExt.Parallel;
+//using LanguageExt.Parallel;
 
 namespace SmallShopBigAmbitions.Monads.LanguageExtExtensions;
 

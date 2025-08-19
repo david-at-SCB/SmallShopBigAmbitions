@@ -4,7 +4,7 @@ using SmallShopBigAmbitions.Monads;
 using System.Net.Http.Metrics;
 
 
-namespace SmallShopBigAmbitions.Services;
+namespace SmallShopBigAmbitions.Business.Services;
 //public record EnrichedCustomerProfile(string Profile, string Name, string Badge, string Extra);
 
 //public interface IMockDatabase
