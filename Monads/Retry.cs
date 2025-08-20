@@ -9,22 +9,24 @@ public static class RetryMonadAsync
     {
         async Task<T> Retry(int retriesLeft)
         {
-            var result = await IO.Lift(io).Run(); 
+            try
+            {
+                // IO<T> in v5 is sync, so run it; if you need async work, lift Task with IO.lift
+                return io.Run();
+            }
+            catch (Exception ex)
+            {
+                if (retriesLeft <= 0)
+                    throw new Exception($"Retry limit reached. Last error: {ex.Message}", ex);
 
-            return await result.Match(
-                Succ: val => Task.FromResult(val),
-                Fail: async err =>
-                {
-                    if (retriesLeft <= 0)
-                        throw new Exception($"Retry limit reached. Last error: {err}");
+                if (delay.HasValue)
+                    await Task.Delay(delay.Value);
 
-                    if (delay.HasValue)
-                        await Task.Delay(delay.Value);
-
-                    return await Retry(retriesLeft - 1);
-                });
+                return await Retry(retriesLeft - 1);
+            }
         }
 
-        return IO<T>.LiftAsync(() => Retry(maxRetries));
+        // Wrap the async retry loop into an IO via Task result
+        return IO.lift(() => Retry(maxRetries).GetAwaiter().GetResult());
     }
 }

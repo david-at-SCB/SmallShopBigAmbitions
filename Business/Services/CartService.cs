@@ -18,21 +18,27 @@ public class CartService
     public TraceableT<Cart> GetCartForUser(Guid userId)
     {
         var tracedCart = TraceableTLifts.FromIO(
-            IO<Fin<Cart>>.Try(() =>
+            IO.lift(() =>
             {
                 // Simulate fetching from DB
-                var cart = new Cart(userId, items: new List<Item>());
-                return Fin<Cart>.Succ(cart);
+                return new Cart
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    Items = Option<string[]>.None
+                };
             }),
             "cart.fetch",
             activitySource: Telemetry.CartSource,
-            Attributes: attrs => 
+            attributes: cart =>
             [
-                new KeyValuePair<string, object>("cart.id", attrs.),
-                new KeyValuePair<string, object>( "user.id", attrs.UserId),
-                new KeyValuePair<string, object>("cart.item.count", attrs.Items.Match(items => items.Length, () => 0))
+                new KeyValuePair<string, object>("cart.id", cart.Id),
+                new KeyValuePair<string, object>("user.id", cart.UserId),
+                new KeyValuePair<string, object>("cart.item.count", cart.Items.Match(items => items.Length, () => 0))
             ]
         ).WithLogging(_logger);
+
+        return tracedCart;
     }
 
     public static TraceableT<Cart> GetCartForUser_first_iteration(Guid userId, ILogger logger)

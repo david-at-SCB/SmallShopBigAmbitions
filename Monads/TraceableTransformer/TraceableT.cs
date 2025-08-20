@@ -7,10 +7,34 @@ public record TraceableT<A>(
     Func<A, IEnumerable<KeyValuePair<string, object>>>? Attributes = null
 )
 {
+    /// <summary>
+    /// Main method to run the traceable effect and log the span.
+    /// The bread and butter of the traceable transformer.
+    /// </summary>
+    /// <returns></returns>
     public IO<A> RunTraceable() =>
         from result in Effect
         select LogSpan(result);
 
+    /// <summary>
+    /// CancellationToken-aware version of RunTraceable.
+    /// </summary>
+    /// <param name="ct"></param>
+    /// <returns></returns>
+    public IO<A> RunTraceable(CancellationToken ct) =>
+        from result in IO.lift(() =>
+        {
+            ct.ThrowIfCancellationRequested();
+            return Effect.Run();
+        })
+        select LogSpan(result);
+
+    /// <summary>
+    /// Do the actual logging of the span.
+    /// Add attributes if provided.
+    /// </summary>
+    /// <param name="result"></param>
+    /// <returns></returns>
     private A LogSpan(A result)
     {
         using var activity = ActivitySource.StartActivity(SpanName);

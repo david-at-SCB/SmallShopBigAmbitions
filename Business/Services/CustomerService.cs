@@ -4,7 +4,6 @@ using SmallShopBigAmbitions.Monads.TraceableTransformer;
 
 public class UserService
 {
-
     private readonly CartService _cartService;
     private readonly BillingService _billingService;
 
@@ -15,14 +14,14 @@ public class UserService
     }
 
     /// <summary>
-    /// MediatR makes sure only a authorized service can call this method.
+    /// MediatR makes sure only an authorized service can call this method.
     /// </summary>
     /// <param name="userId"></param>
     /// <param name="logger"></param>
     /// <returns></returns>
-    public static TraceableT<UserCheckoutResult> CheckoutUserCart(Guid userId, ILogger logger)
+    public TraceableT<UserCheckoutResult> CheckoutUserCart(Guid userId, ILogger logger)
     {
-        return from cart in CartService.GetCartForUser(userId, logger)
+        return from cart in _cartService.GetCartForUser(userId)
                from charge in BillingService.ChargeCustomer(cart.Id, userId, logger)
                select new UserCheckoutResult
                {
