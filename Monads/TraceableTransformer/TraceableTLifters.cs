@@ -1,4 +1,6 @@
-﻿namespace SmallShopBigAmbitions.Monads.TraceableTransformer;
+﻿using System.Diagnostics;
+
+namespace SmallShopBigAmbitions.Monads.TraceableTransformer;
 
 public static class TraceableTLifts
 {
@@ -13,6 +15,7 @@ public static class TraceableTLifts
     public static TraceableT<A> FromIO<A>(
         IO<A> effect,
         string spanName,
+        ActivitySource activitySource,
         Func<A, IEnumerable<KeyValuePair<string, object>>>? attributes = null) =>
-        new TraceableT<A>(effect, spanName, attributes);
+        new(effect, spanName, activitySource, attributes);
 }

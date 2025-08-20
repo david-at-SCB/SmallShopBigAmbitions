@@ -6,7 +6,7 @@ namespace SmallShopBigAmbitions.Logic_examples;
 
 public class TraceableIOLoggerExample
 {
-    public static void Main(string[] args)
+    public static string RunExample()
     {
         // Instantiate a normal logger instance using LoggerFactory
         var logger = LoggerFactory.Create(builder =>
@@ -22,11 +22,13 @@ public class TraceableIOLoggerExample
                 Some: profile => $"User: {profile.User}, Profile: {profile.Profile}, Badge: {profile.Badge}, Extra: {profile.Extra}",
                 None: () => "No enriched profile found"
             );
-            Console.WriteLine($"Enriched Profile: {enrichedProfile}");
+            //Console.WriteLine($"Enriched Profile: {enrichedProfile}");
+            return $"Enriched Profile: {enrichedProfile}";
         }
         else
         {
-            Console.WriteLine("No profile found.");
+            //Console.WriteLine("No profile found.");
+            return "No profile found.";
         }
     }
 

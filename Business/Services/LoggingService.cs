@@ -1,6 +1,5 @@
-﻿namespace SmallShopBigAmbitions.Business.Services
+﻿namespace SmallShopBigAmbitions.Business.Services;
+
+public class LoggingService
 {
-    public class LoggingService
-    {
-    }
 }

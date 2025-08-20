@@ -4,7 +4,7 @@ namespace SmallShopBigAmbitions.TracingSources;
 
 public static class Telemetry
 {
-    public static readonly ActivitySource CartSource = new("SmallShop.Cart");
-    public static readonly ActivitySource OrderSource = new("SmallShop.Order");
-    public static readonly ActivitySource BillingSource = new("SmallShop.Billing");
+    public static readonly ActivitySource BillingSource = new("Service.Billing");
+    public static readonly ActivitySource CartSource = new("Service.Cart");
+    public static readonly ActivitySource OrderSource = new("Service.Order");
 }

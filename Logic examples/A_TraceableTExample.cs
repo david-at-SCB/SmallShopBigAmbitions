@@ -21,7 +21,6 @@ public static class C_ALittleMoreComplexTraceableTExample
 
         bool success = result.Run();
         Console.WriteLine($"Billing success: {success}");
-
     }
 
     private static class BillingService
@@ -68,6 +67,7 @@ public static class C_ALittleMoreComplexTraceableTExample
                 }
             ).WithLogging(logger);
     }
+
     private static class OrderService
     {
         public static IO<string> CreateOrder(List<string> items) =>
@@ -84,8 +84,8 @@ public static class C_ALittleMoreComplexTraceableTExample
                 ActivitySource: TracerIOExample.Source,
                 Attributes: orderId =>
                 [
-                new KeyValuePair<string, object>("order.id", orderId),
-                new KeyValuePair<string, object>("order.item.count", items.Count)
+                    new KeyValuePair<string, object>("order.id", orderId),
+                    new KeyValuePair<string, object>("order.item.count", items.Count)
                 ]
             ).WithLogging(logger);
     }
@@ -122,18 +122,21 @@ public class A_TraceableTExample
         var tracedProfile = TraceableTLifts.FromIO(
               MockDb.GetUserProfile(user),
               "user.profile.fetch",
+              activitySource: TracerIOExample.Source,
               TraceableTAttributes.FromFinOption<string>("profile")
           ).WithLogging(logger);
 
         var tracedBadge = TraceableTLifts.FromIO(
             MockDb.GetUserProfileBadge(user),
             "user.badge.fetch",
+            activitySource: TracerIOExample.Source,
             TraceableTAttributes.FromFinOption<string>("badge")
         ).WithLogging(logger);
 
         var tracedExtra = TraceableTLifts.FromIO(
             MockDb.GetMoreUserStuff(user),
             "user.extra.fetch",
+            activitySource: TracerIOExample.Source,
             TraceableTAttributes.FromFinOption<string>("extra")
         ).WithLogging(logger);
 
@@ -148,7 +151,7 @@ public class A_TraceableTExample
                 let profileOpt = Flatten(p) // flatten our result, otherwise we have Fin<Option<T>> and we want Option<T>
                 let badgeOpt = Flatten(b)
                 let extraOpt = Flatten(e)
-                let enrichedOpt = Map3(profileOpt, badgeOpt, extraOpt, // use Map3 to combine the 3 Options into one    
+                let enrichedOpt = Map3(profileOpt, badgeOpt, extraOpt, // use Map3 to combine the 3 Options into one
                     (profile, badge, extra) => new EnrichedUserProfile(user, profile, badge, extra)) // create our enriched profile
                 select enrichedOpt; // return the result
     }
@@ -164,8 +167,6 @@ public class A_TraceableTExample
         Succ: opt => opt,
         Fail: _ => Option<T>.None
     );
-
-
 
     /// <summary>
     /// To avoid the need for a Monad stack, we can use a Map3 function to map over three Option values.
@@ -214,6 +215,7 @@ public class B_EvenMoreTraceableTExamples
             new TraceableT<string>(
                 Effect: FetchUserName(userId),
                 SpanName: "FetchUserName",
+                ActivitySource: TracerIOExample.Source,
                 Attributes: name => new[]
                 {
                     new KeyValuePair<string, object>("user.id", userId),
@@ -222,9 +224,10 @@ public class B_EvenMoreTraceableTExamples
             );
     }
 }
+
 // Example tracer source (replace with your actual tracer)
 internal static class TracerIOExample
 {
     // but an ActivitySource is a span in OTEL lingo? Dont we need more than this hardcoded one?
-    public static readonly System.Diagnostics.ActivitySource Source = new("SmallShopBigAmbitions.TraceableTExample");
+    public static readonly System.Diagnostics.ActivitySource Source = new("TraceableTExample");
 }

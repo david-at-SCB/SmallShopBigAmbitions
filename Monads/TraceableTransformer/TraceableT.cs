@@ -39,4 +39,25 @@ public record TraceableT<A>(
 
         return this with { Attributes = combinedAttrs };
     }
+
+    public TraceableT<B> Map<B>(Func<A, B> f) =>
+    new TraceableT<B>(
+        Effect: IO.lift(() => f(Effect.Run())),
+        SpanName: SpanName + ".Map",
+        ActivitySource: ActivitySource,
+        Attributes: b => Enumerable.Empty<KeyValuePair<string, object>>() // optional
+    );
+
+    public TraceableT<B> Bind<B>(Func<A, TraceableT<B>> f) =>
+        new TraceableT<B>(
+            Effect: IO.lift(() =>
+            {
+                var a = Effect.Run();
+                var next = f(a);
+                return next.Effect.Run();
+            }),
+            SpanName: SpanName + ".Bind",
+            ActivitySource: ActivitySource,
+            Attributes: b => Enumerable.Empty<KeyValuePair<string, object>>() // optional
+        );
 }

@@ -1,18 +1,17 @@
 ﻿using SmallShopBigAmbitions.Monads.TraceableTransformer;
 using System.Diagnostics;
+using SmallShopBigAmbitions.TracingSources;
 
 namespace SmallShopBigAmbitions.Business.Services;
 
 public class BillingService
 {
-    private static readonly ActivitySource ActivitySource = new("MyShop.BillingService");
-
     public static TraceableT<ChargeResult> ChargeCustomer(Guid cartId, Guid userId, ILogger logger)
     {
         return new TraceableT<ChargeResult>(
             Effect: IO.lift(() =>
             {
-                Thread.Sleep(120);
+                Thread.Sleep(120); // Simulate a delay for the billing operation
                 var transactionId = Guid.NewGuid();
                 var receiptId = Guid.NewGuid();
 
@@ -27,25 +26,26 @@ public class BillingService
                 };
             }),
             SpanName: "BillingService.ChargeCustomer",
-            Attributes: result => new[]
-            {
+            ActivitySource: Telemetry.BillingSource,
+            Attributes: result =>
+            [
                 new KeyValuePair<string, object>("billing.success", result.Success),
                 new KeyValuePair<string, object>("billing.message", result.Message),
                 new KeyValuePair<string, object>("cart.id", result.Cart),
                 new KeyValuePair<string, object>("user.id", result.User),
                 new KeyValuePair<string, object>("transaction.id", result.Transaction),
                 new KeyValuePair<string, object>("receipt.id", result.Receipt)
-            }
+            ]
         ).WithLogging(logger);
     }
 
-    public record ChargeResult
-    {
-        public Fin<bool> Success { get; init; }
-        public Option<string> Message { get; init; } = string.Empty;
-        public Guid Cart { init; get; }
-        public Guid User { init; get; }
-        public Guid Transaction { init; get; }
-        public Guid Receipt { init; get; }
-    }
+}
+public record ChargeResult
+{
+    public Fin<bool> Success { get; init; }
+    public Option<string> Message { get; init; } = string.Empty;
+    public Guid Cart { init; get; }
+    public Guid User { init; get; }
+    public Guid Transaction { init; get; }
+    public Guid Receipt { init; get; }
 }

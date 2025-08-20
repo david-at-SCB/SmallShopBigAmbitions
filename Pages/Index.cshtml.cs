@@ -18,13 +18,14 @@ namespace SmallShopBigAmbitions.Pages
 
         public async Task<IActionResult> OnPostRunExampleAsync()
         {
-            var result = await _loggerExample.Example();
+            var result = TraceableIOLoggerExample.RunExample();
+            ResultMessage = result;
+            //ResultMessage = result.Match(
+            //    Succ: profile => $"Successfully enriched user profile: {profile.User}, {profile.Profile}, {profile.Badge}, {profile.Extra}",
+            //    Fail: error => $"Failed to enrich user profile: {error.Message}"
+            //);
 
-            ResultMessage = result.Match(
-                Succ: profile => $"Successfully enriched user profile: {profile.User}, {profile.Profile}, {profile.Badge}, {profile.Extra}",
-                Fail: error => $"Failed to enrich user profile: {error.Message}"
-            );
-
+            // how do i return a string to the view?
             return Page();
         }
     }

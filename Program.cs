@@ -6,43 +6,59 @@ global using LanguageExt.Pretty;
 global using LanguageExt.Traits;
 global using LanguageExt.Traits.Domain;
 global using static LanguageExt.Prelude;
+using MediatR;
 using OpenTelemetry.Extensions.Hosting;
-using OpenTelemetry.Resources;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using Serilog;
 using SmallShopBigAmbitions.Application.Billing;
+using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.Logic_examples;
 
 var builder = WebApplication.CreateBuilder(args);
 
+
+////// OPEN TELEMETRY LOGGING
 // Add OpenTelemetry tracing
-var billingServiceName = "SmallShopBigAmbitions.Billing";
-var orderServiceName = "SmallShopBigAmbitions.Order";
-var cartServiceName = "SmallShopBigAmbitions.Cart";
+var serviceName = "SmallShopBigAmbitions.Webshop";
 builder.Logging.AddOpenTelemetry(options =>
 {
     options
         .SetResourceBuilder(
             ResourceBuilder.CreateDefault()
-                .AddService(billingServiceName))
-        //.AddService(orderServiceName))
-        //.AddService(cartServiceName))
+                .AddService(serviceName))
         .AddConsoleExporter();
 });
 builder.Services.AddOpenTelemetry()
-      .ConfigureResource(resource => resource.AddService(billingServiceName))
+      .ConfigureResource(resource => resource.AddService(serviceName))
       .WithTracing(tracing => tracing
           .AddAspNetCoreInstrumentation()
           .AddConsoleExporter())
       .WithMetrics(metrics => metrics
           .AddAspNetCoreInstrumentation()
           .AddConsoleExporter());
+////// OPEN TELEMETRY LOGGING
+
+////// Serilog configuration
+builder.Services.AddLogging(builder =>
+{
+    builder.AddOpenTelemetry(options =>
+    {
+        options.IncludeFormattedMessage = true;
+        options.IncludeScopes = true;
+        options.ParseStateValues = true;
+    });
+});
+////// ---------------------------
 
 // Add services to the container.
 builder.Services.AddRazorPages();
 
 builder.Services.AddTransient<TraceableIOLoggerExample>();
+builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(AuthorizationBehavior<,>));
+
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssemblyContaining<ChargeCustomerHandler>());
 

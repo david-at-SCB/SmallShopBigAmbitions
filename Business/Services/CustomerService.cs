@@ -1,96 +1,41 @@
-﻿using LanguageExt.Pipes;
-using SmallShopBigAmbitions.Models;
-using SmallShopBigAmbitions.Monads;
-using System.Net.Http.Metrics;
+﻿namespace SmallShopBigAmbitions.Business.Services;
 
+using SmallShopBigAmbitions.Monads.TraceableTransformer;
 
-namespace SmallShopBigAmbitions.Business.Services;
-//public record EnrichedCustomerProfile(string Profile, string Name, string Badge, string Extra);
-
-//public interface IMockDatabase
-//{
-//    IO<Customer> GetUser();
-//    IO<string> GetUserProfile(Customer user);
-//    IO<string> GetUserProfileBadge(Customer user);
-//    IO<string> GetMoreUserStuff(Customer user);
-//}
-
-public class CustomerService
+public class UserService
 {
-    public void TODO() => Console.WriteLine("Make this example work");
 
-    //    public EnrichedCustomerProfile GetDetailedCustomerProfile(
-    //        IMockDatabase db)
-    //    {
-    //        // Step 1: Get user
-    //        var customerResult = new Traceable<IO<Customer>>(
-    //            () => db.GetUser(),
-    //            "user.fetch",
-    //            customer => new[] { KeyValuePair.Create("user.id", (object)customer.Select(cust => cust.Name)) }
-    //        ).Run();
-    //        // Step 2: Parallel fetches
-    //        var enrichedResult = customerResult.Bind(user =>
-    //        {
-    //            var profileT = new Traceable<IO<string>>(
-    //                () => db.GetUserProfile(user),
-    //                "user.profile.fetch",
-    //                profile => new[] { KeyValuePair.Create("profile.length", (object)profile.Length) }
-    //            );
-    //            var badgeT = new Traceable<IO<string>>(
-    //                () => db.GetUserProfileBadge(user),
-    //                "user.badge.fetch"
-    //            );
-    //            var extraT = new Traceable<IO<string>>(
-    //                () => db.GetMoreUserStuff(user),
-    //                "user.extra.fetch"
-    //            );
-    //            // Run in parallel
-    //            var profile = profileT.Run();
-    //            var badge = badgeT.Run();
-    //            var extra = extraT.Run();
-    //            return IO(() => new EnrichedUserProfile(profile.Run(), user.Name, badge.Run(), extra.Run()));
-    //        });
-    //        return context;
-    //    }
+    private readonly CartService _cartService;
+    private readonly BillingService _billingService;
 
-    //    public EnrichedCustomerProfile GetDetailedCustomerProfileWithParallelFetches(
-    //        IMockDatabase db)
-    //    {
+    public UserService(CartService cartService, BillingService billingService)
+    {
+        _billingService = billingService;
+        _cartService = cartService;
+    }
 
-    //        // Step 1: Get user
-    //        var userResult = new Traceable<IO<User>>(
-    //            () => db.GetUser(),
-    //            "user.fetch",
-    //            user => new[] { KeyValuePair.Create("user.id", (object)user.Id) }
-    //        ).Run();
+    /// <summary>
+    /// MediatR makes sure only a authorized service can call this method.
+    /// </summary>
+    /// <param name="userId"></param>
+    /// <param name="logger"></param>
+    /// <returns></returns>
+    public static TraceableT<UserCheckoutResult> CheckoutUserCart(Guid userId, ILogger logger)
+    {
+        return from cart in CartService.GetCartForUser(userId, logger)
+               from charge in BillingService.ChargeCustomer(cart.Id, userId, logger)
+               select new UserCheckoutResult
+               {
+                   UserId = userId,
+                   CartId = cart.Id,
+                   Charged = charge
+               };
+    }
+}
 
-    //        // Step 2: Parallel fetches
-    //        var enrichedResult = userResult.Bind(user =>
-    //        {
-    //            var profileT = new Traceable<IO<string>>(
-    //                () => db.GetUserProfile(user),
-    //                "user.profile.fetch",
-    //                profile => new[] { KeyValuePair.Create("profile.length", (object)profile.Length) }
-    //            );
-
-    //            var badgeT = new Traceable<IO<string>>(
-    //                () => db.GetUserProfileBadge(user),
-    //                "user.badge.fetch"
-    //            );
-
-    //            var extraT = new Traceable<IO<string>>(
-    //                () => db.GetMoreUserStuff(user),
-    //                "user.extra.fetch"
-    //            );
-
-    //            // Run in parallel
-    //            var profile = profileT.Run();
-    //            var badge = badgeT.Run();
-    //            var extra = extraT.Run();
-
-    //            return IO(() => new EnrichedUserProfile(profile.Run(), user.Name, badge.Run(), extra.Run()));
-    //        });
-
-    //    }
-
+public record UserCheckoutResult
+{
+    public Guid UserId { get; init; }
+    public Guid CartId { get; init; }
+    public required Fin<ChargeResult> Charged { get; init; } // Fin<T> requires keyword "required" for nullability annotations.
 }

@@ -9,7 +9,7 @@ public static class RetryMonadAsync
     {
         async Task<T> Retry(int retriesLeft)
         {
-            var result = await Lift<T>(io);
+            var result = await IO.Lift(io).Run(); 
 
             return await result.Match(
                 Succ: val => Task.FromResult(val),

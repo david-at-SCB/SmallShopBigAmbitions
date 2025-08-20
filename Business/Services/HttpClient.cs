@@ -1,6 +1,5 @@
-﻿namespace SmallShopBigAmbitions.Business.Services
+﻿namespace SmallShopBigAmbitions.Business.Services;
+
+public class HttpClient
 {
-    public class HttpClient
-    {
-    }
 }
