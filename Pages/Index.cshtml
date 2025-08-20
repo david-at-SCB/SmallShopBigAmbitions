@@ -1,21 +1,33 @@
 ﻿@page
-@model IndexModel
+@model SmallShopBigAmbitions.Pages.IndexModel
 @{
     ViewData["Title"] = "Home page";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Detta är en liten butik med stora ambitioner.</p>
-</div>
-<div>
-    <form method="post">
-        <button type="submit" asp-page-handler="RunExample">Run Example</button>
-    </form>
-</div>
-@if (!string.IsNullOrEmpty(Model.ResultMessage))
+<h1>Webshop</h1>
+
+<form method="post" asp-page-handler="AddItemsAndCheckout">
+    <input type="hidden" name="UserId" value="@Guid.NewGuid()" />
+    <button type="submit" class="btn btn-primary">Add 3 items and checkout</button>
+</form>
+
+@if (Model.CheckoutResult.IsSome)
 {
-    <div>
-        <p>@Model.ResultMessage</p>
+    var res = Model.CheckoutResult.Match(
+        Some: r => r,
+        None: () => default!);
+    <div class="alert alert-info mt-3">
+        Checkout: @(res.Match(Succ: _ => "Success", Fail: e => $"Failed: {e.Message}"))
     </div>
 }
+
+<section class="mt-4">
+    <h3>Traceable Example Result</h3>
+    <form method="post" asp-page-handler="RunExample">
+        <button type="submit" class="btn btn-secondary">Run Example</button>
+    </form>
+    @if (!string.IsNullOrEmpty(Model.ResultMessage))
+    {
+        <pre>@Model.ResultMessage</pre>
+    }
+</section>

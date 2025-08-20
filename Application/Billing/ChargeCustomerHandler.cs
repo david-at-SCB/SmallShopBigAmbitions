@@ -8,10 +8,12 @@ namespace SmallShopBigAmbitions.Application.Billing
     public class ChargeCustomerHandler : IRequestHandler<ChargeCustomerCommand, Fin<ChargeResult>>
     {
         private readonly ILogger<BillingService> _logger;
+        private readonly BillingService _billingService;
 
-        public ChargeCustomerHandler(ILogger<BillingService> logger)
+        public ChargeCustomerHandler(ILogger<BillingService> logger, BillingService billingService)
         {
             _logger = logger;
+            _billingService = billingService;
         }
 
         public Task<Fin<ChargeResult>> Handle(ChargeCustomerCommand request, CancellationToken ct)
@@ -21,23 +23,23 @@ namespace SmallShopBigAmbitions.Application.Billing
             {
                 var err = authResult.Match(
                     Succ: _ => Error.New("Unauthorized"),
-                    Fail: e => e);
+                    Fail: e => e);            
                 return Task.FromResult(Fin<ChargeResult>.Fail(err));
             }
 
-            // does this run async?
-            //var traceable = BillingService.ChargeCustomer(request.CartId, request.UserId, _logger);
-            //var result = traceable.RunTraceable().Run();
-            //return Task.FromResult(Fin<ChargeResult>.Succ(result));
+            try
+            {
+                var result = _billingService
+                    .ChargeCustomer(request.CartId, request.UserId)
+                    .RunTraceable(ct)
+                    .Run();
 
-            // this is lazy and async, no?
-            var resultturn = BillingService
-                .ChargeCustomer(request.CartId, request.UserId, _logger)
-                .RunTraceable();
-
-            return Task.FromResult(Fin<ChargeResult>.Succ(resultturn.Run()));
-
+                return Task.FromResult(Fin<ChargeResult>.Succ(result));
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(Fin<ChargeResult>.Fail(Error.New(ex.Message)));
+            }
         }
     }
-
 }

@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.Application.Billing;
 
-namespace SmallShopBigAmbitions.Controllers;
+namespace SmallShopBigAmbitions.Business.Controllers;
 
 public record ChargeRequestDto(Guid CartId, Guid UserId);
 

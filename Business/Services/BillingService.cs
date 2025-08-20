@@ -6,12 +6,19 @@ namespace SmallShopBigAmbitions.Business.Services;
 
 public class BillingService
 {
-    public static TraceableT<ChargeResult> ChargeCustomer(Guid cartId, Guid userId, ILogger logger)
+    private readonly ILogger<BillingService> _logger;
+
+    public BillingService(ILogger<BillingService> logger)
+    {
+        _logger = logger;
+    }
+
+    public TraceableT<ChargeResult> ChargeCustomer(Guid cartId, Guid userId)
     {
         return new TraceableT<ChargeResult>(
             Effect: IO.lift(() =>
             {
-                Thread.Sleep(120); // Simulate a delay for the billing operation
+                Thread.Sleep(1200); // Simulate a delay for the billing operation
                 var transactionId = Guid.NewGuid();
                 var receiptId = Guid.NewGuid();
 
@@ -36,10 +43,10 @@ public class BillingService
                 new KeyValuePair<string, object>("transaction.id", result.Transaction),
                 new KeyValuePair<string, object>("receipt.id", result.Receipt)
             ]
-        ).WithLogging(logger);
+        ).WithLogging(_logger);
     }
-
 }
+
 public record ChargeResult
 {
     public Fin<bool> Success { get; init; }

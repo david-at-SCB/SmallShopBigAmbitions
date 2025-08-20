@@ -1,4 +1,7 @@
-﻿using MediatR;
+﻿using LanguageExt;
+using MediatR;
+using SmallShopBigAmbitions.Auth;
+using SmallShopBigAmbitions.FunctionalDispatcher;
 
 namespace SmallShopBigAmbitions.Auth;
 
@@ -7,25 +10,19 @@ public interface IAuthorizedRequest
     TrustedContext Context { get; }
 }
 
-public class AuthorizationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
-where TRequest : IAuthorizedRequest
+public class AuthorizationBehavior<TRequest, TResponse> : IFunctionalPipelineBehavior<TRequest, TResponse>
+    where TRequest : IAuthorizedRequest, IFunctionalRequest<TResponse>
 {
-    /// <summary>
-    ///  How do we handle cancellationtokens?
-    /// </summary>
-    /// <param name="request"></param>
-    /// <param name="next"></param>
-    /// <param name="ct"></param>
-    /// <returns></returns>
-    public Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken ct)
+    public IO<Fin<TResponse>> Handle(
+        TRequest request,
+        CancellationToken ct,
+        Func<TRequest, CancellationToken, IO<Fin<TResponse>>> next)
     {
         var authResult = AuthorizationGuards.EnsureTrusted(request.Context);
-        if (authResult.IsFail)
-        {
-            var error = authResult.Match(Succ: _ => Error.New("Unauthorized"), Fail: e => e);
-            var fail = typeof(TResponse).GetMethod("Fail", new[] { typeof(Error) })?.Invoke(null, new object[] { error });
-            return Task.FromResult((TResponse)fail!);
-        }
-        return next(ct);
+        return authResult.Match(
+            Succ: _ => next(request, ct),
+            Fail: err => IO(Fin<TResponse>.Fail(err))
+        );
     }
 }
+

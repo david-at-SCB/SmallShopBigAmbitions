@@ -41,6 +41,26 @@ public class CartService
         return tracedCart;
     }
 
+    public TraceableT<Cart> AddItems(Cart cart, IEnumerable<string> items)
+    {
+        return TraceableTLifts.FromIO(
+            IO.lift(() => new Cart
+            {
+                Id = cart.Id,
+                UserId = cart.UserId,
+                Items = Option<string[]>.Some(items.ToArray())
+            }),
+            spanName: "cart.add_items",
+            activitySource: Telemetry.CartSource,
+            attributes: c =>
+            [
+                new KeyValuePair<string, object>("cart.id", c.Id),
+                new KeyValuePair<string, object>("user.id", c.UserId),
+                new KeyValuePair<string, object>("cart.item.count", c.Items.Match(xs => xs.Length, () => 0))
+            ]
+        ).WithLogging(_logger);
+    }
+
     public static TraceableT<Cart> GetCartForUser_first_iteration(Guid userId, ILogger logger)
     {
         return new TraceableT<Cart>(
