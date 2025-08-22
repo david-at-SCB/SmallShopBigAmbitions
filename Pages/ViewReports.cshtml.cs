@@ -1,36 +1,26 @@
-using MediatR;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using SmallShopBigAmbitions.Application.Cart;
+using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
 using SmallShopBigAmbitions.Auth;
-using SmallShopBigAmbitions.Business.Services;
+using SmallShopBigAmbitions.FunctionalDispatcher;
 
 namespace SmallShopBigAmbitions.Pages
 {
     public class ViewReportsModel : PageModel
     {
-        private readonly IMediator _mediator;
+        private readonly IFunctionalDispatcher _dispatcher;
 
-        public ViewReportsModel(IMediator mediator)
+        public ViewReportsModel(IFunctionalDispatcher dispatcher)
         {
-            _mediator = mediator;
+            _dispatcher = dispatcher;
         }
 
         //public Fin<ReportService.Report> Reports { get; private set; }
 
-        public async Task OnGetAsync(Guid userId, CancellationToken ct)
+        public async Task OnGetAsync(Guid userId, TrustedContext context, CancellationToken ct)
         {
-            var trustedContext = new TrustedContext
-            {
-                CallerId = Guid.NewGuid(),
-                Role = "Service",
-                Token = Request.Headers["Authorization"].ToString()
-            };
-
-            //Cart = await _mediator.Send(new GetCartForUserQuery(userId, trustedContext), ct);
-             //Simulating a report generation
-             //Reports = await _mediator.Send(new GetReportsQuery(userId, trustedContext), ct);
+            var cart = await _dispatcher.Dispatch(new GetCartForUserQuery(userId), ct).RunAsync();
+            //Simulating a report generation
+            // Reports = await _mediator.Send(new GetReportsQuery(userId, trustedContext), ct);
         }
     }
 }
-    

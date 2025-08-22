@@ -1,4 +1,5 @@
-﻿using SmallShopBigAmbitions.Monads.TraceableTransformer;
+﻿using SmallShopBigAmbitions.Models;
+using SmallShopBigAmbitions.Monads.TraceableTransformer;
 
 namespace SmallShopBigAmbitions.Business.Services;
 public class UserService
@@ -24,7 +25,7 @@ public class UserService
                };
     }
 
-    public TraceableT<UserCheckoutResult> CheckoutExistingCart(CartService.Cart cart, Guid userId)
+    public TraceableT<UserCheckoutResult> CheckoutExistingCart(CustomerCart cart, Guid userId)
     {
         return from charge in _billingService.ChargeCustomer(cart.Id, userId)
                select new UserCheckoutResult

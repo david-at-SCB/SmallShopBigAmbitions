@@ -2,23 +2,29 @@ global using LanguageExt;
 global using LanguageExt.Common;
 global using LanguageExt.Pipes;
 global using static LanguageExt.Prelude;
-using MediatR;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
-using SmallShopBigAmbitions.Application.Billing;
-using SmallShopBigAmbitions.Application.Cart;
+using SmallShopBigAmbitions.Application.Billing.ChargeCustomer;
+using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
+using SmallShopBigAmbitions.Application.HelloWorld;
 using SmallShopBigAmbitions.Auth;
+using SmallShopBigAmbitions.Auth.Behaviours;
+using SmallShopBigAmbitions.Auth.Policy;
 using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.FunctionalDispatcher;
+using SmallShopBigAmbitions.FunctionalDispatcher.DI;
 using SmallShopBigAmbitions.Logic_examples;
+using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.TracingSources;
+using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
 var serviceName = "SmallShopBigAmbitions.Webshop";
+builder.Services.AddSingleton(new ActivitySource("SmallShopBigAmbitions"));
 
 ///// ++++++ SERILOG
 // Bootstrap Serilog early to capture startup logs
@@ -59,8 +65,6 @@ builder.Services.AddOpenTelemetry()
 
 ////// ++++++ SERVICES
 builder.Services.AddTransient<TraceableIOLoggerExample>();
-builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(TracingBehavior<,>));
-builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(AuthorizationBehavior<,>));
 builder.Services.AddScoped<BillingService>();
 builder.Services.AddScoped<CartService>();
 builder.Services.AddScoped<LoggingService>();
@@ -70,21 +74,29 @@ builder.Services.AddScoped<OrderService>();
 ////// ------ SERVICES
 
 ////// ++++++ FUNCTIONAL DISPATCHER
-builder.Services.Scan(scan => scan //CS1501 Scan doesnt take 1 argument ?
-    .FromAssemblyOf<SomeHandler>()
-    .AddClasses(classes => classes.AssignableTo(typeof(IFunctionalHandler<,>)))
-    .AsImplementedInterfaces()
-    .WithScopedLifetime());
+/// inject trusted context to all handlers
+builder.Services.AddScoped<IFunctionalDispatcher, FunctionalDispatcher>();
+builder.Services.AddScoped<TrustedContext>(provider =>
+{
+    var httpContext = provider.GetRequiredService<IHttpContextAccessor>().HttpContext;
+    var token = httpContext?.Request.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "");
+    var validator = provider.GetRequiredService<IJwtValidator>();
+    return validator.Validate(token!).Match(
+        Succ: ctx => ctx,
+        Fail: _ => new TrustedContext() // fallback
+    );
+});
 
-builder.Services.Scan(scan => scan //CS1501 Scan doesnt take 1 argument ?
-    .FromAssemblyOf<SomeBehavior>()
-    .AddClasses(classes => classes.AssignableTo(typeof(IFunctionalPipelineBehavior<,>)))
-    .AsImplementedInterfaces()
-    .WithScopedLifetime());
-
-builder.Services.AddScoped<FunctionalDispatcher>();
-
+builder.Services.AddFunctionalHandlerWithPolicy<ChargeCustomerCommand, ChargeResult, ChargeCustomerHandler, ChargeCustomerPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<GetCartForUserQuery, CustomerCart, GetCartForUserHandler, GetCartForUserPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<HelloWorldRequest, string, HelloWorldHandler, HelloWorldPolicy>();
+builder.Services.AddScoped(typeof(IAuthorizationPolicy<>), typeof(AdminOnlyPolicy<>));
+builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(AuthorizationBehavior<,>));
+builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(LoggingBehavior<,>));
 ////// ------ FUNCTIONAL DISPATCHER
+
+
+
 
 builder.Services.AddRazorPages();
 var app = builder.Build();

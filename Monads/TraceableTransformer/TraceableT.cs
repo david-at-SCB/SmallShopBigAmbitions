@@ -1,9 +1,11 @@
-﻿using System.Diagnostics;
+﻿using SmallShopBigAmbitions.TracingSources;
+using System.Diagnostics;
+
+namespace SmallShopBigAmbitions.Monads.TraceableTransformer;
 
 public record TraceableT<A>(
     IO<A> Effect,
     string SpanName,
-    ActivitySource ActivitySource,
     Func<A, IEnumerable<KeyValuePair<string, object>>>? Attributes = null
 )
 {
@@ -37,7 +39,7 @@ public record TraceableT<A>(
     /// <returns></returns>
     private A LogSpan(A result)
     {
-        using var activity = ActivitySource.StartActivity(SpanName);
+        using var activity = ShopActivitySource.Instance.StartActivity(SpanName);
         if (activity != null && Attributes != null)
         {
             foreach (var attr in Attributes(result))
@@ -65,15 +67,14 @@ public record TraceableT<A>(
     }
 
     public TraceableT<B> Map<B>(Func<A, B> f) =>
-    new TraceableT<B>(
-        Effect: IO.lift(() => f(Effect.Run())),
-        SpanName: SpanName + ".Map",
-        ActivitySource: ActivitySource,
-        Attributes: b => Enumerable.Empty<KeyValuePair<string, object>>() // optional
-    );
+        new(
+            Effect: IO.lift(() => f(Effect.Run())),
+            SpanName: SpanName + ".Map",
+            Attributes: b => Enumerable.Empty<KeyValuePair<string, object>>() // old syntax
+        );
 
     public TraceableT<B> Bind<B>(Func<A, TraceableT<B>> f) =>
-        new TraceableT<B>(
+        new(
             Effect: IO.lift(() =>
             {
                 var a = Effect.Run();
@@ -81,7 +82,25 @@ public record TraceableT<A>(
                 return next.Effect.Run();
             }),
             SpanName: SpanName + ".Bind",
-            ActivitySource: ActivitySource,
-            Attributes: b => Enumerable.Empty<KeyValuePair<string, object>>() // optional
+            Attributes: b => [] // modern syntax
         );
+}
+
+public static class TraceableTHelpers
+{
+    public static TraceableT<A> From<A>(IO<A> effect, ServiceSpan span)
+    {
+        return new TraceableT<A>(
+            Effect: effect,
+            SpanName: span.ToString()
+        );
+    }
+
+    public static TraceableT<A> From<A>(IO<A> effect, string spanName)
+    {
+        return new TraceableT<A>(
+            Effect: effect,
+            SpanName: spanName
+        );
+    }
 }

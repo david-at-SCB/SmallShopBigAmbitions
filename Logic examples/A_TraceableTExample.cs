@@ -36,7 +36,6 @@ public static class C_ALittleMoreComplexTraceableTExample
             new TraceableT<bool>(
                 Effect: ChargeCustomer(orderId, userId),
                 SpanName: "BillingService.ChargeCustomer",
-                ActivitySource: TracerIOExample.Source,
                 Attributes: success => new[]
                 {
                 new KeyValuePair<string, object>("order.id", orderId),
@@ -59,7 +58,6 @@ public static class C_ALittleMoreComplexTraceableTExample
             new TraceableT<List<string>>(
                 Effect: GetCartItems(userId),
                 SpanName: "CartService.GetCartItems",
-                ActivitySource: TracerIOExample.Source,
                 Attributes: items => new[]
                 {
                 new KeyValuePair<string, object>("user.id", userId),
@@ -81,7 +79,6 @@ public static class C_ALittleMoreComplexTraceableTExample
             new TraceableT<string>(
                 Effect: CreateOrder(items),
                 SpanName: "OrderService.CreateOrder",
-                ActivitySource: TracerIOExample.Source,
                 Attributes: orderId =>
                 [
                     new KeyValuePair<string, object>("order.id", orderId),
@@ -122,21 +119,18 @@ public class A_TraceableTExample
         var tracedProfile = TraceableTLifts.FromIO(
               MockDb.GetUserProfile(user),
               "user.profile.fetch",
-              activitySource: TracerIOExample.Source,
               TraceableTAttributes.FromFinOption<string>("profile")
           ).WithLogging(logger);
 
         var tracedBadge = TraceableTLifts.FromIO(
             MockDb.GetUserProfileBadge(user),
             "user.badge.fetch",
-            activitySource: TracerIOExample.Source,
             TraceableTAttributes.FromFinOption<string>("badge")
         ).WithLogging(logger);
 
         var tracedExtra = TraceableTLifts.FromIO(
             MockDb.GetMoreUserStuff(user),
             "user.extra.fetch",
-            activitySource: TracerIOExample.Source,
             TraceableTAttributes.FromFinOption<string>("extra")
         ).WithLogging(logger);
 
@@ -215,12 +209,11 @@ public class B_EvenMoreTraceableTExamples
             new TraceableT<string>(
                 Effect: FetchUserName(userId),
                 SpanName: "FetchUserName",
-                ActivitySource: TracerIOExample.Source,
-                Attributes: name => new[]
-                {
+                Attributes: name =>
+                [
                     new KeyValuePair<string, object>("user.id", userId),
                     new KeyValuePair<string, object>("user.name", name)
-                }
+                ]
             );
     }
 }

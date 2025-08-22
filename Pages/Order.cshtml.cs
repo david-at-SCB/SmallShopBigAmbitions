@@ -1,22 +1,21 @@
-using MediatR;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using SmallShopBigAmbitions.Application.Cart;
+using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
 using SmallShopBigAmbitions.Auth;
-using SmallShopBigAmbitions.Business.Services;
+using SmallShopBigAmbitions.FunctionalDispatcher;
+using SmallShopBigAmbitions.Models;
 
 namespace SmallShopBigAmbitions.Pages
 {
     public class OrderModel : PageModel
     {
-        private readonly IMediator _mediator;
+        private readonly IFunctionalDispatcher _dispatcher;
 
-        public OrderModel(IMediator mediator)
+        public OrderModel(IFunctionalDispatcher mediator)
         {
-            _mediator = mediator;
+            _dispatcher = mediator;
         }
 
-        public Fin<CartService.Cart> Cart { get; private set; }
+        public Fin<CustomerCart> Cart { get; private set; }
 
         public async Task OnGetAsync(Guid userId, CancellationToken ct)
         {
@@ -24,10 +23,10 @@ namespace SmallShopBigAmbitions.Pages
             {
                 CallerId = Guid.NewGuid(),
                 Role = "Service",
-                Token = Request.Headers["Authorization"].ToString()
+                Token = Request.Headers.Authorization.ToString()
             };
 
-            Cart = await _mediator.Send(new GetCartForUserQuery(userId, trustedContext), ct);
+            Cart = await _dispatcher.Dispatch(new GetCartForUserQuery(userId), ct).RunAsync();
         }
     }
 }

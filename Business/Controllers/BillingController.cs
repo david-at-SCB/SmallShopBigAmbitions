@@ -1,7 +1,7 @@
-﻿using MediatR;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+using SmallShopBigAmbitions.Application.Billing.ChargeCustomer;
 using SmallShopBigAmbitions.Auth;
-using SmallShopBigAmbitions.Application.Billing;
+using SmallShopBigAmbitions.FunctionalDispatcher;
 
 namespace SmallShopBigAmbitions.Business.Controllers;
 
@@ -11,11 +11,11 @@ public record ChargeRequestDto(Guid CartId, Guid UserId);
 [Route("api/[controller]")]
 public class BillingController : ControllerBase
 {
-    private readonly IMediator _mediator;
+    private readonly IFunctionalDispatcher _dispatcher;
 
-    public BillingController(IMediator mediator)
+    public BillingController(IFunctionalDispatcher dispatcher)
     {
-        _mediator = mediator;
+        _dispatcher = dispatcher;
     }
 
     [HttpPost("charge")]
@@ -24,13 +24,13 @@ public class BillingController : ControllerBase
         // Simulate extracting a TrustedContext from headers or token
         var trustedContext = new TrustedContext
         {
-            CallerId = Guid.NewGuid(), // Or extract from token
-            Role = "Service", // Or "Admin", etc.
-            Token = Request.Headers["Authorization"].ToString()
+            CallerId = Guid.NewGuid(), // dummy, for now. TODO: Implement proper extraction
+            Role = "Service",
+            Token = Request.Headers.Authorization.ToString()
         };
-
-        var command = new ChargeCustomerCommand(request.CartId, request.UserId, trustedContext);
-        var result = await _mediator.Send(command);
+        var ct = new CancellationToken(); // Use a real CancellationToken in production. TODO:!
+        var command = new ChargeCustomerCommand(request.CartId, request.UserId);
+        var result = await _dispatcher.Dispatch(command, ct).RunAsync();
 
         return result.Match<IActionResult>(
             Succ: r => Ok(r),

@@ -6,4 +6,8 @@ public record TrustedContext
     public string Role { get; init; } = "Service"; // e.g., "Admin", "User", "Service"
     public string Token { get; init; } = string.Empty; // Optional JWT or API token
     public bool IsTrusted => Role == "Service" || Role == "Admin"; // Simplified trust logic
+
+    public static IO<Unit> RequireTrusted(TrustedContext context) =>
+    IO.lift(() => AuthorizationGuards.EnsureTrusted(context));
+
 }

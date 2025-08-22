@@ -1,7 +1,7 @@
-﻿using MediatR;
-using Microsoft.AspNetCore.Mvc;
-using SmallShopBigAmbitions.Application.Billing;
+﻿using Microsoft.AspNetCore.Mvc;
+using SmallShopBigAmbitions.Application.Billing.CheckoutUser;
 using SmallShopBigAmbitions.Auth;
+using SmallShopBigAmbitions.FunctionalDispatcher;
 
 namespace SmallShopBigAmbitions.Controllers;
 
@@ -11,11 +11,11 @@ public record CheckoutRequest(Guid UserId);
 [Route("api/[controller]")]
 public class CheckoutController : ControllerBase
 {
-    private readonly IMediator _mediator;
+    private readonly IFunctionalDispatcher _dispatcher;
 
-    public CheckoutController(IMediator mediator)
+    public CheckoutController(IFunctionalDispatcher dispatcher)
     {
-        _mediator = mediator;
+        _dispatcher = dispatcher;
     }
 
     [HttpPost]
@@ -28,15 +28,15 @@ public class CheckoutController : ControllerBase
             Token = Request.Headers.Authorization.ToString()
         };
 
-        var command = new CheckoutUserCommand(request.UserId, trustedContext);
-        var result = await _mediator.Send(command, ct);
+        var command = new CheckoutUserCommand(request.UserId);
+        var result = await _dispatcher.Dispatch(command, ct).RunAsync();
 
         return result.Match<IActionResult>(
-            Succ: r => Ok(new
+            Succ: result => Ok(new
             {
-                user = r.UserId,
-                cart = r.CartId,
-                charged = r.Charged.Match(Succ: _ => true, Fail: _ => false)
+                user = result.UserId,
+                cart = result.CartId,
+                charged = result.Charged.Match(Succ: _ => true, Fail: _ => false)
             }),
             Fail: e => Problem(detail: e.Message)
         );

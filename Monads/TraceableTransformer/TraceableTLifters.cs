@@ -15,7 +15,54 @@ public static class TraceableTLifts
     public static TraceableT<A> FromIO<A>(
         IO<A> effect,
         string spanName,
-        ActivitySource activitySource,
         Func<A, IEnumerable<KeyValuePair<string, object>>>? attributes = null) =>
-        new(effect, spanName, activitySource, attributes);
+        new(effect, spanName, attributes);
+
+    public static IO<Fin<A>> ToFinFromInnerSuccess<A>(this TraceableT<A> traceable, CancellationToken ct, Func<A, Fin<bool>> successSelector)
+    {
+        return traceable.RunTraceable(ct).Map(result =>
+            successSelector(result).Match(
+                Succ: _ => Fin<A>.Succ(result),
+                Fail: err => Fin<A>.Fail(err)
+            )
+        );
+    }
+
+    public static IO<Fin<A>> RunTraceableFin<A>(this TraceableT<A> traceable, CancellationToken ct) =>
+        IO<Fin<A>>.Lift(() =>
+        {
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                var result = traceable.RunTraceable().Run();
+                return Fin<A>.Succ(result);
+            }
+            catch (Exception ex)
+            {
+                return Fin<A>.Fail(Error.New(ex));
+            }
+        });
+
+    // Explicit names to avoid overload confusion, suffixed with TracableT
+    public static TraceableT<A> FromIOFinThrowingTracableT<A>(
+        IO<Fin<A>> effect,
+        string spanName,
+        Func<A, IEnumerable<KeyValuePair<string, object>>>? attributes = null) =>
+        FromIO(
+            IO.lift<A>(() => effect.Run().ThrowIfFail()),
+            spanName,
+            attributes
+        );
+
+    public static TraceableT<T> FromIO<T>(IO<T> io, string spanName) =>
+        new(io, spanName);
+
+    public static TraceableT<Fin<T>> FromIOFinRawTracableT<T>(IO<Fin<T>> io, string spanName) =>
+        new(io, spanName);
+
+    public static TraceableT<Fin<T>> FromFin<T>(Fin<T> fin, string spanName) =>
+        new TraceableT<Fin<T>>(IO.lift<Fin<T>>(() => fin), spanName);
+
+    public static TraceableT<T> FromValue<T>(T value, string spanName) =>
+        new(IO.lift(() => value), spanName);
 }

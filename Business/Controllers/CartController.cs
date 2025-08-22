@@ -1,8 +1,8 @@
-﻿using MediatR;
-using Microsoft.AspNetCore.Mvc;
-using SmallShopBigAmbitions.Application.Cart;
+﻿using Microsoft.AspNetCore.Mvc;
+using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
 using SmallShopBigAmbitions.Auth;
-using SmallShopBigAmbitions.Business.Services;
+using SmallShopBigAmbitions.FunctionalDispatcher;
+using SmallShopBigAmbitions.Models;
 
 namespace SmallShopBigAmbitions.Business.Controllers;
 
@@ -10,11 +10,11 @@ namespace SmallShopBigAmbitions.Business.Controllers;
 [Route("api/cart")]
 public class CartController : ControllerBase
 {
-    private readonly IMediator _mediator;
+    private readonly IFunctionalDispatcher _dispatcher;
 
-    public CartController(IMediator mediator)
+    public CartController(IFunctionalDispatcher dispatcher)
     {
-        _mediator = mediator;
+        _dispatcher = dispatcher;
     }
 
     [HttpGet("{userId}")]
@@ -27,7 +27,8 @@ public class CartController : ControllerBase
             Token = Request.Headers.Authorization.ToString()
         };
 
-        Fin<CartService.Cart> result = await _mediator.Send(new GetCartForUserQuery(userId, trustedContext));
+        var ct = new CancellationToken(); // Use a real CancellationToken in production. TODO:!
+        Fin<CustomerCart> result = await _dispatcher.Dispatch(new GetCartForUserQuery(userId), ct).RunAsync();
 
         return result.Match<IActionResult>(
             Succ: cart => Ok(cart),
@@ -35,6 +36,3 @@ public class CartController : ControllerBase
         );
     }
 }
-
-
-

@@ -1,5 +1,4 @@
-﻿using SmallShopBigAmbitions.Logic_examples;
-using SmallShopBigAmbitions.Monads.Traceable;
+﻿using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
 using SmallShopBigAmbitions.TracingSources;
 
@@ -14,22 +13,19 @@ public class CartService
         _logger = logger;
     }
 
-
-    public TraceableT<Cart> GetCartForUser(Guid userId)
+    public TraceableT<CustomerCart> GetCartForUser(Guid userId)
     {
         var tracedCart = TraceableTLifts.FromIO(
             IO.lift(() =>
             {
                 // Simulate fetching from DB
-                return new Cart
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    Items = Option<string[]>.None
-                };
+                return new CustomerCart(
+                    Id: Guid.NewGuid(),
+                    UserId: userId,
+                    Items: Option<string[]>.None
+                );
             }),
             "cart.fetch",
-            activitySource: Telemetry.CartSource,
             attributes: cart =>
             [
                 new KeyValuePair<string, object>("cart.id", cart.Id),
@@ -41,17 +37,14 @@ public class CartService
         return tracedCart;
     }
 
-    public TraceableT<Cart> AddItems(Cart cart, IEnumerable<string> items)
+    public TraceableT<CustomerCart> AddItems(CustomerCart cart, IEnumerable<string> items)
     {
         return TraceableTLifts.FromIO(
-            IO.lift(() => new Cart
+            IO.lift(() => cart with
             {
-                Id = cart.Id,
-                UserId = cart.UserId,
                 Items = Option<string[]>.Some(items.ToArray())
             }),
             spanName: "cart.add_items",
-            activitySource: Telemetry.CartSource,
             attributes: c =>
             [
                 new KeyValuePair<string, object>("cart.id", c.Id),
@@ -61,21 +54,19 @@ public class CartService
         ).WithLogging(_logger);
     }
 
-    public static TraceableT<Cart> GetCartForUser_first_iteration(Guid userId, ILogger logger)
+    public static TraceableT<CustomerCart> GetCartForUser_first_iteration(Guid userId, ILogger logger)
     {
-        return new TraceableT<Cart>(
+        return new TraceableT<CustomerCart>(
             Effect: IO.lift(() =>
             {
                 Thread.Sleep(1500); // Simulate DB or API call
-                return new Cart
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    Items = Option<string[]>.Some(["item1", "item2"])
-                };
+                return new CustomerCart(
+                    Id: Guid.NewGuid(),
+                    UserId: userId,
+                    Items: Option<string[]>.Some(["item1", "item2"]) 
+                );
             }),
             SpanName: "CartService.GetCartForUser",
-            ActivitySource: Telemetry.CartSource,
             Attributes: cart =>
             [
                 new KeyValuePair<string, object>("cart.id", cart.Id),
@@ -83,12 +74,5 @@ public class CartService
                 new KeyValuePair<string, object>("cart.item.count", cart.Items.Match(items => items.Length, () => 0))
             ]
         ).WithLogging(logger);
-    }
-
-    public record Cart
-    {
-        public Guid Id { get; init; }
-        public Guid UserId { get; init; }
-        public Option<string[]> Items { get; init; }
     }
 }

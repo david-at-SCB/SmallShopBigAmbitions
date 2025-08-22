@@ -1,5 +1,6 @@
 namespace SmallShopBigAmbitions.Monads.Traceable;
 
+[Obsolete("Use the new TraceableTAttributes class instead.")]
 public static class TraceableAttributes
 {
     public static Func<T, IEnumerable<KeyValuePair<string, object>>> FromValue<T>(string key)

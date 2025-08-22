@@ -6,6 +6,21 @@
 
 <h1>Webshop</h1>
 
+<section class="mt-4">
+    <h2>Hello World Functional Flow</h2>
+    <form method="post" asp-page-handler="SayHello">
+        <input type="text" name="name" placeholder="Your name" class="form-control mb-2" />
+        <button type="submit" class="btn btn-success">Say Hello</button>
+    </form>
+
+    @if (!string.IsNullOrEmpty(Model.HelloResult))
+    {
+        <div class="alert alert-info mt-3">
+            @Model.HelloResult
+        </div>
+    }
+</section>
+
 <form method="post" asp-page-handler="AddItemsAndCheckout">
     <input type="hidden" name="UserId" value="@Guid.NewGuid()" />
     <button type="submit" class="btn btn-primary">Add 3 items and checkout</button>
@@ -22,7 +37,7 @@
 }
 
 <section class="mt-4">
-    <h3>Traceable Example Result</h3>
+    <h2>Traceable Example Result</h2>
     <form method="post" asp-page-handler="RunExample">
         <button type="submit" class="btn btn-secondary">Run Example</button>
     </form>
@@ -31,3 +46,14 @@
         <pre>@Model.ResultMessage</pre>
     }
 </section>
+
+<section>
+    <h2>
+        Go to a product
+    </h2>
+    <form asp-page-handler="GoToProducts">
+        <button type="submit" class="btn btn-secondary">Go to Products</button>
+    </form>
+</section>
+
+
