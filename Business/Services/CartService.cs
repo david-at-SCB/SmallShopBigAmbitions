@@ -1,4 +1,6 @@
-﻿using SmallShopBigAmbitions.Models;
+﻿using SmallShopBigAmbitions.Application.Cart.AddItemToCart;
+using SmallShopBigAmbitions.Database;
+using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
 using SmallShopBigAmbitions.TracingSources;
 
@@ -7,10 +9,14 @@ namespace SmallShopBigAmbitions.Business.Services;
 public class CartService
 {
     private readonly ILogger<CartService> _logger;
+    private readonly UserService _UserService;
+    private readonly IDataAccess _DataAccess;
 
-    public CartService(ILogger<CartService> logger)
+    public CartService(ILogger<CartService> logger, UserService usrsrvc, IDataAccess _dtAccss)
     {
         _logger = logger;
+        _UserService = usrsrvc;
+        _DataAccess = _dtAccss;
     }
 
     public TraceableT<CustomerCart> GetCartForUser(Guid userId)
@@ -63,7 +69,7 @@ public class CartService
                 return new CustomerCart(
                     Id: Guid.NewGuid(),
                     UserId: userId,
-                    Items: Option<string[]>.Some(["item1", "item2"]) 
+                    Items: Option<string[]>.Some(["item1", "item2"])
                 );
             }),
             SpanName: "CartService.GetCartForUser",
@@ -74,5 +80,11 @@ public class CartService
                 new KeyValuePair<string, object>("cart.item.count", cart.Items.Match(items => items.Length, () => 0))
             ]
         ).WithLogging(logger);
+    }
+
+    internal Cart GetCartByUserId(Guid userId)
+    {
+        // TODO: Trace?
+        return _DataAccess.GetUserCart(userId);
     }
 }

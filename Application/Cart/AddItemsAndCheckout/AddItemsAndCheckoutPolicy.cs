@@ -1,5 +1,5 @@
-﻿using SmallShopBigAmbitions.Auth;
-using SmallShopBigAmbitions.Auth.Policy;
+﻿using SmallShopBigAmbitions.Application._Policy;
+using SmallShopBigAmbitions.Auth;
 
 namespace SmallShopBigAmbitions.Application.Cart.AddItemsAndCheckout;
 

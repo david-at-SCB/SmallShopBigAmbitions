@@ -5,7 +5,7 @@ using SmallShopBigAmbitions.Monads.TraceableTransformer;
 
 namespace SmallShopBigAmbitions.Application.Billing.CheckoutUser;
 
-public class CheckoutUserHandler : IFunctionalHandler<CheckoutUserCommand, UserCheckoutResult>
+public class CheckoutUserHandler : IFunctionalHandler<CheckoutUserCommand, CheckoutUserResultDTO>
 {
     private readonly UserService _userService;
     private readonly ILogger<CheckoutUserHandler> _logger;
@@ -16,19 +16,13 @@ public class CheckoutUserHandler : IFunctionalHandler<CheckoutUserCommand, UserC
         _logger = logger;
     }
 
-    public IO<Fin<UserCheckoutResult>> Handle(CheckoutUserCommand request, TrustedContext context, CancellationToken ct)
+    public IO<Fin<CheckoutUserResultDTO>> Handle(CheckoutUserCommand request, TrustedContext context, CancellationToken ct)
     {
-        var flow =
-            from _ in TraceableTLifts.FromIO<Unit>(
-                AuthorizationGuards.RequireTrustedORThrow(context),
-                "RequireTrusted"
-            )
-            from result in _userService.CheckoutUserCart(request.UserId)
-            select result;
-
-        return flow
+        var flow = _userService.CheckoutUserCart(request.UserId)
+            .RequireTrusted(context) // prepend the guard combinator
             .WithSpanName("CheckoutUser")
-            .WithLogging(_logger)
-            .RunTraceableFin(ct);
+            .WithLogging(_logger);
+
+        return flow.RunTraceableFin(ct);
     }
 }

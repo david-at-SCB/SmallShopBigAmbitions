@@ -1,4 +1,7 @@
-﻿using SmallShopBigAmbitions.Models;
+﻿using SmallShopBigAmbitions.Application.Billing.CheckoutUser;
+using SmallShopBigAmbitions.Application.Cart.AddItemToCart;
+using SmallShopBigAmbitions.Database;
+using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
 
 namespace SmallShopBigAmbitions.Business.Services;
@@ -6,40 +9,44 @@ public class UserService
 {
     private readonly CartService _cartService;
     private readonly BillingService _billingService;
+    private readonly IDataAccess _dataAccess;
 
-    public UserService(CartService cartService, BillingService billingService)
+    public UserService(IDataAccess DataAccess, CartService cartService, BillingService billingService)
     {
         _billingService = billingService;
         _cartService = cartService;
+        
     }
 
-    public TraceableT<UserCheckoutResult> CheckoutUserCart(Guid userId)
+    public TraceableT<CheckoutUserResultDTO> CheckoutUserCart(Guid userId)
     {
-        return from cart in _cartService.GetCartForUser(userId)
+        var result = from cart in _cartService.GetCartForUser(userId)
                from charge in _billingService.ChargeCustomer(cart.Id, userId)
-               select new UserCheckoutResult
+               select new CheckoutUserResultDTO
                {
                    UserId = userId,
                    CartId = cart.Id,
                    Charged = charge
                };
+        // TODO: persist the result of the checkout operation
+        //var persistRecord = Mappers.Map(result);
+        //_dataAccess.Save(persistRecord);
+        return result;
     }
 
-    public TraceableT<UserCheckoutResult> CheckoutExistingCart(CustomerCart cart, Guid userId)
+    public TraceableT<CheckoutUserResultDTO> CheckoutExistingCart(CustomerCart cart, Guid userId)
     {
         return from charge in _billingService.ChargeCustomer(cart.Id, userId)
-               select new UserCheckoutResult
+               select new CheckoutUserResultDTO
                {
                    UserId = userId,
                    CartId = cart.Id,
                    Charged = charge
                };
     }
-}
 
-public record UserCheckoutResult
-{
-    public Guid UserId { get; init; }
-    public Guid CartId { get; init; }
-    public required Fin<ChargeResult> Charged { get; init; }
+    internal User GetUserById(Guid userId)
+    {
+        throw new NotImplementedException();
+    }
 }

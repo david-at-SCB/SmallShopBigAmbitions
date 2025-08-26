@@ -1,3 +1,4 @@
+using SmallShopBigAmbitions.Application.Billing.CheckoutUser;
 using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.FunctionalDispatcher;
@@ -6,7 +7,7 @@ using SmallShopBigAmbitions.Monads.TraceableTransformer;
 
 namespace SmallShopBigAmbitions.Application.Cart.AddItemsAndCheckout;
 
-public class AddItemsAndCheckoutHandler : IFunctionalHandler<AddItemsAndCheckoutCommand, UserCheckoutResult>
+public class AddItemsAndCheckoutHandler : IFunctionalHandler<AddItemsAndCheckoutCommand, CheckoutUserResultDTO>
 {
     private readonly CartService _cartService;
     private readonly UserService _userService;
@@ -22,7 +23,7 @@ public class AddItemsAndCheckoutHandler : IFunctionalHandler<AddItemsAndCheckout
         _logger = logger;
     }
 
-    public IO<Fin<UserCheckoutResult>> Handle(AddItemsAndCheckoutCommand request, TrustedContext context, CancellationToken ct)
+    public IO<Fin<CheckoutUserResultDTO>> Handle(AddItemsAndCheckoutCommand request, TrustedContext context, CancellationToken ct)
     {
         var flow =
             from _ in TraceableTLifts.FromIO<Unit>( 

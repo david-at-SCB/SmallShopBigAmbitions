@@ -1,8 +1,9 @@
 ﻿using SmallShopBigAmbitions.TracingSources;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using System.Diagnostics;
+using SmallShopBigAmbitions.Auth;
 
-namespace SmallShopBigAmbitions.Auth.Behaviours;
+namespace SmallShopBigAmbitions.Application._Behaviours;
 
 public class TracingBehavior<TRequest, TResponse> : IFunctionalPipelineBehavior<TRequest, TResponse>
     where TRequest : IFunctionalRequest<TResponse>
@@ -24,7 +25,7 @@ public class TracingBehavior<TRequest, TResponse> : IFunctionalPipelineBehavior<
             if (result.IsFail)
             {
                 var err = result.Match(
-                    Succ: _ => (string?)null,
+                    Succ: _ => null,
                     Fail: e => e.Message
                 );
                 if (err is not null)
@@ -34,7 +35,7 @@ public class TracingBehavior<TRequest, TResponse> : IFunctionalPipelineBehavior<
             {
                 var val = result.Match(
                     Succ: v => v?.ToString(),
-                    Fail: _ => (string?)null
+                    Fail: _ => null
                 );
                 if (val is not null)
                     activity?.SetTag("result", val);

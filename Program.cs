@@ -7,12 +7,12 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
+using SmallShopBigAmbitions.Application._Behaviours;
+using SmallShopBigAmbitions.Application._Policy;
 using SmallShopBigAmbitions.Application.Billing.ChargeCustomer;
 using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
 using SmallShopBigAmbitions.Application.HelloWorld;
 using SmallShopBigAmbitions.Auth;
-using SmallShopBigAmbitions.Auth.Behaviours;
-using SmallShopBigAmbitions.Auth.Policy;
 using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.FunctionalDispatcher.DI;
@@ -68,7 +68,11 @@ builder.Services.AddTransient<TraceableIOLoggerExample>();
 builder.Services.AddScoped<BillingService>();
 builder.Services.AddScoped<CartService>();
 builder.Services.AddScoped<LoggingService>();
-builder.Services.AddScoped<ProductService>();
+// Use typed HttpClient for ProductService targeting Fake Store API base address
+builder.Services.AddHttpClient<ProductService>(client =>
+{
+    client.BaseAddress = new Uri("https://fakestoreapi.com/");
+});
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<OrderService>();
 ////// ------ SERVICES

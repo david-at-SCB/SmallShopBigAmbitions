@@ -2,7 +2,7 @@
 
 public class ViewReportsModel : Microsoft.AspNetCore.Mvc.RazorPages.PageModel
 {
-    public List<Product> Products { get; set; } = [];
+    public List<FakeStoreProduct> Products { get; set; } = [];
     public Content Contains { get; set; } = Models.Content.Unset;
 }
 

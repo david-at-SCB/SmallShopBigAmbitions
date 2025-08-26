@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using SmallShopBigAmbitions.Application.Billing.CheckoutUser;
 using SmallShopBigAmbitions.Application.Cart;
 using SmallShopBigAmbitions.Application.Cart.AddItemsAndCheckout;
 using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
 using SmallShopBigAmbitions.Application.HelloWorld;
 using SmallShopBigAmbitions.Auth;
-using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Logic_examples;
 using SmallShopBigAmbitions.Models;
@@ -27,7 +27,7 @@ public class IndexModel : PageModel
 
     public Option<Fin<CustomerCart>> Cart { get; private set; }
 
-    public Option<Fin<UserCheckoutResult>> CheckoutResult { get; private set; }
+    public Option<Fin<CheckoutUserResultDTO>> CheckoutResult { get; private set; }
 
     [BindProperty]
     public string? HelloResult { get; set; }
@@ -87,10 +87,10 @@ public class IndexModel : PageModel
         CheckoutResult = result.Match(
             Succ: res =>
             {
-                CheckoutResult = Option<Fin<UserCheckoutResult>>.Some(res);
+                CheckoutResult = Option<Fin<CheckoutUserResultDTO>>.Some(res);
                 return CheckoutResult;
             },
-            Fail: err => Fin<UserCheckoutResult>.Fail(err)
+            Fail: err => Fin<CheckoutUserResultDTO>.Fail(err)
         );
 
         return Page();

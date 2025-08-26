@@ -1,6 +1,7 @@
-﻿using SmallShopBigAmbitions.FunctionalDispatcher;
+﻿using SmallShopBigAmbitions.Auth;
+using SmallShopBigAmbitions.FunctionalDispatcher;
 
-namespace SmallShopBigAmbitions.Auth.Policy;
+namespace SmallShopBigAmbitions.Application._Policy;
 
 public class AdminOnlyPolicy<TRequest> : IAuthorizationPolicy<TRequest>
     where TRequest : IFunctionalRequest<object>

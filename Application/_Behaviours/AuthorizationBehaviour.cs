@@ -1,7 +1,8 @@
-﻿using SmallShopBigAmbitions.Auth.Policy;
+﻿using SmallShopBigAmbitions.Application._Policy;
+using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 
-namespace SmallShopBigAmbitions.Auth.Behaviours;
+namespace SmallShopBigAmbitions.Application._Behaviours;
 
 public class AuthorizationBehavior<TRequest, TResponse> : IFunctionalPipelineBehavior<TRequest, TResponse>
     where TRequest : IFunctionalRequest<TResponse>

@@ -32,6 +32,7 @@ public enum Services
     Cart,
     Billing,
     Order,
+    User,
     Mediator,
     // etc.
 }

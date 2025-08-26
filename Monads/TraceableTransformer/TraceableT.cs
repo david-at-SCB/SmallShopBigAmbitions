@@ -1,4 +1,6 @@
-﻿using SmallShopBigAmbitions.TracingSources;
+﻿using LanguageExt;
+using SmallShopBigAmbitions.TracingSources;
+using System.Collections.Immutable;
 using System.Diagnostics;
 
 namespace SmallShopBigAmbitions.Monads.TraceableTransformer;
@@ -86,21 +88,16 @@ public record TraceableT<A>(
         );
 }
 
-public static class TraceableTHelpers
+public static class TraceableTExtensions
 {
-    public static TraceableT<A> From<A>(IO<A> effect, ServiceSpan span)
-    {
-        return new TraceableT<A>(
-            Effect: effect,
-            SpanName: span.ToString()
-        );
-    }
-
-    public static TraceableT<A> From<A>(IO<A> effect, string spanName)
-    {
-        return new TraceableT<A>(
-            Effect: effect,
+    public static TraceableT<Fin<T>> WithTracingAndRetry<T>(
+        string spanName,
+        IO<Fin<T>> effect,
+        int maxRetries,
+        TimeSpan? delay = null
+    ) =>
+        new(
+            Effect: RetryIO.WithRetry(effect, maxRetries, delay ?? TimeSpan.FromMilliseconds(200)),
             SpanName: spanName
         );
-    }
 }

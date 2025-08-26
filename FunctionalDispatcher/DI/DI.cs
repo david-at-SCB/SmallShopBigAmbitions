@@ -1,4 +1,4 @@
-﻿using SmallShopBigAmbitions.Auth.Policy;
+﻿using SmallShopBigAmbitions.Application._Policy;
 
 namespace SmallShopBigAmbitions.FunctionalDispatcher.DI;
 

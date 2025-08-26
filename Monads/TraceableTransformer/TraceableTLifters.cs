@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Immutable;
 
 namespace SmallShopBigAmbitions.Monads.TraceableTransformer;
 
@@ -17,6 +17,24 @@ public static class TraceableTLifts
         string spanName,
         Func<A, IEnumerable<KeyValuePair<string, object>>>? attributes = null) =>
         new(effect, spanName, attributes);
+
+    /// <summary>
+    /// Overload: accept attributes as a LanguageExt.HashMap for unique-key semantics.
+    /// </summary>
+    public static TraceableT<A> FromIO<A>(
+        IO<A> effect,
+        string spanName,
+        Func<A, HashMap<string, object>> attributes) =>
+        new(effect, spanName, a => attributes(a));
+
+    /// <summary>
+    /// Overload: accept attributes as an ImmutableDictionary for unique-key semantics.
+    /// </summary>
+    public static TraceableT<A> FromIO<A>(
+        IO<A> effect,
+        string spanName,
+        Func<A, ImmutableDictionary<string, object>> attributes) =>
+        new(effect, spanName, a => attributes(a));
 
     public static IO<Fin<A>> ToFinFromInnerSuccess<A>(this TraceableT<A> traceable, CancellationToken ct, Func<A, Fin<bool>> successSelector)
     {
@@ -60,8 +78,29 @@ public static class TraceableTLifts
     public static TraceableT<Fin<T>> FromIOFinRawTracableT<T>(IO<Fin<T>> io, string spanName) =>
         new(io, spanName);
 
-    public static TraceableT<Fin<T>> FromFin<T>(Fin<T> fin, string spanName) =>
-        new TraceableT<Fin<T>>(IO.lift<Fin<T>>(() => fin), spanName);
+    public static TraceableT<Fin<T>> FromFin<T>(
+        Fin<T> fin,
+        string spanName,
+        Func<Fin<T>, IEnumerable<KeyValuePair<string, object>>>? attributes) =>
+            new(IO.lift<Fin<T>>(() => fin), spanName, attributes);
+
+    /// <summary>
+    /// Overload: accept HashMap attributes for Fin<T>.
+    /// </summary>
+    public static TraceableT<Fin<T>> FromFin<T>(
+        Fin<T> fin,
+        string spanName,
+        Func<Fin<T>, HashMap<string, object>> attributes) =>
+            new(IO.lift<Fin<T>>(() => fin), spanName, a => attributes(a));
+
+    /// <summary>
+    /// Overload: accept ImmutableDictionary attributes for Fin<T>.
+    /// </summary>
+    public static TraceableT<Fin<T>> FromFin<T>(
+        Fin<T> fin,
+        string spanName,
+        Func<Fin<T>, ImmutableDictionary<string, object>> attributes) =>
+            new(IO.lift<Fin<T>>(() => fin), spanName, a => attributes(a));
 
     public static TraceableT<T> FromValue<T>(T value, string spanName) =>
         new(IO.lift(() => value), spanName);

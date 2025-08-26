@@ -1,0 +1,29 @@
+@page "{id:int}"
+@model SmallShopBigAmbitions.Pages.ProductDetailsModel
+@{
+    ViewData["Title"] = "Product Details";
+}
+
+@if (Model.Product is null)
+{
+    <div class="alert alert-warning">Product not found.</div>
+}
+else
+{
+    <div class="row g-4">
+        <div class="col-md-5">
+            <img src="@Model.Product.Image" class="img-fluid rounded border" alt="@Model.Product.Title" />
+        </div>
+        <div class="col-md-7">
+            <h2>@Model.Product.Title</h2>
+            <p class="text-muted">Category: @Model.Product.Category</p>
+            <p>@Model.Product.Description</p>
+            <h4>$@Model.Product.Price</h4>
+            <form method="post" asp-page-handler="AddToCart">
+                <input type="hidden" name="id" value="@Model.Product.Id" />
+                <button type="submit" class="btn btn-primary">Add to cart</button>
+                <a asp-page="/Products" class="btn btn-outline-secondary ms-2">Back to products</a>
+            </form>
+        </div>
+    </div>
+}

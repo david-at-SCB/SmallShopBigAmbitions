@@ -1,31 +1,36 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.Models;
 
 namespace SmallShopBigAmbitions.Pages;
 
 public class ProductsModel : PageModel
 {
-    public ProductsModel(IDispatcher dispatcher)
-    {
-        _dispatcher = dispatcher;
-    }   
+    private readonly ProductService _productService;
 
-    public void OnGet()
+    public ProductsModel(ProductService products)
     {
-        // This method is called when the page is accessed via a GET request.
-        // You can add logic here to retrieve product data or perform other actions.
+        _productService = products;
     }
 
-    public List<Product> OnPostGoToProducts()
+    public List<FakeStoreProduct> Products { get; private set; } = [];
+
+    [TempData]
+    public string? Message { get; set; }
+
+    public async Task OnGetAsync(CancellationToken ct)
     {
-        // This method is called when the form on the page is submitted.
-        // You can add logic here to handle the form submission, such as redirecting to a products page.
-        // For example, you might redirect to a different page that lists products.
-        var context = GetTrustedContextSomeHow();
-        var request = new GetAllProductsQuery();
-        var products = _dispatcher.Dispatch(request, CancellationToken.None).RunAsync().Result;
-        
-        return Response.AppendTrailer(products);
+        Products = await _productService.GetProductsAsync(ct);
+    }
+
+    public IActionResult OnPostAddToCart(int id)
+    {
+        // TODO: integrate with real cart persistence. For now just show a message.
+        Message = $"Added product {id} to cart.";
+        // cart service. AddToCart(userId,productid); // This would be a call to your cart service
+        // wait for user
+        // update page without reload, only reload the cart if necessary.
+        return RedirectToPage();
     }
 }
