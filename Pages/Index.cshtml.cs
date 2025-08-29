@@ -1,3 +1,11 @@
+// Async/IO checklist (Razor Pages + LanguageExt)
+// - Handlers return Task/Task<IActionResult>; always await RunTraceable(ct).RunAsync().
+// - Avoid .Run(), .Result, .Wait() on IO/Aff in web code.
+// - Accept and pass CancellationToken to all effects/HTTP calls.
+// - UI layer calls service async wrappers (Task<T>) and maps Fin/Option to IActionResult.
+// - Use Fin/Option for errors; handle via Match in handlers and return proper IActionResult.
+// - Keep heavy work in services; pages should be thin adapters.
+// - Pass CancellationToken from handler to service.
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using SmallShopBigAmbitions.Application.Billing.CheckoutUser;
@@ -10,6 +18,7 @@ using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Logic_examples;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
+using SmallShopBigAmbitions.TracingSources;
 using System.Diagnostics;
 
 namespace SmallShopBigAmbitions.Pages;
@@ -17,15 +26,14 @@ namespace SmallShopBigAmbitions.Pages;
 public class IndexModel : PageModel
 {
     private readonly IFunctionalDispatcher _dispatcher;
-    private readonly ActivitySource _activitySource;
+    private readonly ActivitySource _activitySource = ShopActivitySource.Instance;
 
-    public IndexModel(IFunctionalDispatcher dispatcher, ActivitySource activitySource)
+    public IndexModel(IFunctionalDispatcher dispatcher)
     {
         _dispatcher = dispatcher;
-        _activitySource = activitySource; // how do i get that ActivitySource injected? :D
     }
 
-    public Option<Fin<CustomerCart>> Cart { get; private set; }
+    public Option<Fin<Cart>> Cart { get; private set; }
 
     public Option<Fin<CheckoutUserResultDTO>> CheckoutResult { get; private set; }
 
@@ -41,22 +49,21 @@ public class IndexModel : PageModel
     {
         if (userId.HasValue)
         {
-            var trustedContext = new TrustedContext
-            {
-                CallerId = Guid.NewGuid(),
-                Role = "Service",
-                Token = Request.Headers.Authorization.ToString()
-            };
+            var trustedContext = TrustedContextFactory.FromHttpContext(HttpContext);
 
             var result = await _dispatcher.Dispatch(new GetCartForUserQuery(userId.Value), ct).RunAsync();
             Cart = result.Match(
-                Succ: cart => Option<Fin<CustomerCart>>.Some(cart),
-                Fail: err => Fin<CustomerCart>.Fail(err)
+                Succ: cart => Option<Fin<Cart>>.Some(cart),
+                Fail: err =>
+                {
+                    var failure = Fin<Cart>.Fail(err);
+                    Cart = Option<Fin<Cart>>.Some(failure); // Fixed: Directly assign the failure to Cart
+                }
             );
         }
         else
         {
-            Cart = Option<Fin<CustomerCart>>.None;
+            Cart = Option<Fin<Cart>>.None;
         }
     }
 
@@ -65,20 +72,19 @@ public class IndexModel : PageModel
         var callerId = Guid.NewGuid();
         var userId = UserId != Guid.Empty ? UserId : callerId;
 
-        var token = Request.Headers.TryGetValue("Authorization", out var authHeader)
-            ? authHeader.ToString()
-            : string.Empty;
+        var trustedContext = TrustedContextFactory.FromHttpContext(HttpContext);
 
-        var trustedContext = new TrustedContext
-        {
-            CallerId = callerId,
-            Role = "Service",
-            Token = token
-        };
+        var items = Cart.Match<Map<FakeStoreProduct, int>>(
+            Some: finCart => finCart.Match(
+                Succ: cart => cart.Items,
+                Fail: _ => Map<FakeStoreProduct, int>()
+            ),
+            None: () => Map<FakeStoreProduct, int>()
+        );
 
-        var cmd = new AddItemsAndCheckoutCommand(
+        var cmd = new AddItemsToCartCommand(
             userId,
-            ["item1", "item2", "item3"] // Explicitly specify the type of the collection
+            items
         );
 
         var result = await _dispatcher.Dispatch(cmd, ct).RunAsync();

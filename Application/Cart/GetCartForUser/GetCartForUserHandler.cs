@@ -6,7 +6,7 @@ using SmallShopBigAmbitions.Monads.TraceableTransformer;
 
 namespace SmallShopBigAmbitions.Application.Cart.GetCartForUser;
 
-public class GetCartForUserHandler : IFunctionalHandler<GetCartForUserQuery, Models.CustomerCart>
+public class GetCartForUserHandler : IFunctionalHandler<GetCartForUserQuery, Models.Cart>
 {
     private readonly CartService _cartService;
     private readonly ILogger<GetCartForUserHandler> _logger;
@@ -19,7 +19,7 @@ public class GetCartForUserHandler : IFunctionalHandler<GetCartForUserQuery, Mod
 
 
 
-    public IO<Fin<Models.CustomerCart>> Handle(GetCartForUserQuery request,TrustedContext context, CancellationToken ct)
+    public IO<Fin<Models.Cart>> Handle(GetCartForUserQuery request,TrustedContext context, CancellationToken ct)
     {
         return
             from _ in AuthorizationGuards.RequireTrustedORThrow(context) // RquireTrusted isnt recognized? CS0130

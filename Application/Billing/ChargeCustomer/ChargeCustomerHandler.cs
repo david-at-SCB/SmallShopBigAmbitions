@@ -2,6 +2,7 @@
 using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Models;
+using SmallShopBigAmbitions.Monads.TraceableTransformer;
 
 namespace SmallShopBigAmbitions.Application.Billing.ChargeCustomer;
 
@@ -9,15 +10,30 @@ public class ChargeCustomerHandler : IFunctionalHandler<ChargeCustomerCommand, C
 {
     private readonly ILogger<BillingService> _logger;
     private readonly BillingService _billingService;
+    private readonly CartService _cartService;
 
-    public ChargeCustomerHandler(ILogger<BillingService> logger, BillingService billingService)
+    public ChargeCustomerHandler(ILogger<BillingService> logger, BillingService billingService, CartService cartService)
     {
         _logger = logger;
         _billingService = billingService;
+        _cartService = cartService;
     }
 
-    public IO<Fin<ChargeResult>> Handle(ChargeCustomerCommand request, TrustedContext context, CancellationToken ct) =>
-        from _ in IO.lift(() => AuthorizationGuards.EnsureTrusted(context)) // request.Context doesnt exist anymore?
-        from result in _billingService.ChargeCustomer(request.CartId, request.UserId).RunTraceable(ct)
-        select result;
+    public IO<Fin<ChargeResult>> Handle(ChargeCustomerCommand request, TrustedContext context, CancellationToken ct)
+    {
+        var flow =
+    from finCart in _cartService.GetCartForUser(request.UserId)
+    from result in finCart.Match(
+        Succ: cart => _billingService.ChargeCustomer(cart)
+            .RequireTrusted(context)
+            .WithSpanName("ChargeCustomer")
+            .WithLogging(_logger),
+        Fail: err => TraceableT<Fin<ChargeResult>>.Fail(err)
+    )
+    select result;
+
+
+
+        return flow.RunTraceableFin(ct);
+    }
 }

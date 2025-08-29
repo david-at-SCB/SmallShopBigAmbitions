@@ -21,12 +21,7 @@ public class CheckoutController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Checkout([FromBody] CheckoutRequest request, CancellationToken ct)
     {
-        var trustedContext = new TrustedContext
-        {
-            CallerId = Guid.NewGuid(),
-            Role = "Service",
-            Token = Request.Headers.Authorization.ToString()
-        };
+        var trustedContext = TrustedContextFactory.FromHttpContext(HttpContext);
 
         var command = new CheckoutUserCommand(request.UserId);
         var result = await _dispatcher.Dispatch(command, ct).RunAsync();
@@ -34,8 +29,8 @@ public class CheckoutController : ControllerBase
         return result.Match<IActionResult>(
             Succ: result => Ok(new
             {
-                user = result.UserId,
-                cart = result.CartId,
+                user = result.CustomerId,
+                cart = result.Cart.Id,
                 charged = result.Charged.Match(Succ: _ => true, Fail: _ => false)
             }),
             Fail: e => Problem(detail: e.Message)

@@ -1,52 +1,29 @@
-﻿using SmallShopBigAmbitions.Application.Billing.CheckoutUser;
+﻿// Async/IO checklist (Razor Pages + LanguageExt)
+// - Handlers return Task/Task<IActionResult>; always await RunTraceable(ct).RunAsync().
+// - Avoid .Run(), .Result, .Wait() on IO/Aff in web code.
+// - Accept and pass CancellationToken to all effects/HTTP calls.
+// - Services: expose composable TraceableT/IO; add Task wrappers (e.g., GetXAsync) for UI.
+// - Use Fin/Option for errors; handle via Match in handlers and return proper IActionResult.
+// - Map DTO -> domain in a mapper; keep IO layer DTO-focused.
+// - Ensure DI registers FunctionalHttpClient and service; no static singletons.
+// - Add .WithLogging and telemetry attributes where useful.
+using SmallShopBigAmbitions.Application.Billing.CheckoutUser;
 using SmallShopBigAmbitions.Application.Cart.AddItemToCart;
 using SmallShopBigAmbitions.Database;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
 
 namespace SmallShopBigAmbitions.Business.Services;
-public class UserService
+public class UserService(IDataAccess DataAccess)
 {
-    private readonly CartService _cartService;
-    private readonly BillingService _billingService;
-    private readonly IDataAccess _dataAccess;
+    private readonly IDataAccess _dataAccess = DataAccess;
 
-    public UserService(IDataAccess DataAccess, CartService cartService, BillingService billingService)
+    public TraceableT<Customer> GetUserById(Guid userId)
     {
-        _billingService = billingService;
-        _cartService = cartService;
-        
+        return _dataAccess.GetCustomerById(userId);
     }
-
-    public TraceableT<CheckoutUserResultDTO> CheckoutUserCart(Guid userId)
+    public TraceableT<Customer> GetUserById(Customer customer)
     {
-        var result = from cart in _cartService.GetCartForUser(userId)
-               from charge in _billingService.ChargeCustomer(cart.Id, userId)
-               select new CheckoutUserResultDTO
-               {
-                   UserId = userId,
-                   CartId = cart.Id,
-                   Charged = charge
-               };
-        // TODO: persist the result of the checkout operation
-        //var persistRecord = Mappers.Map(result);
-        //_dataAccess.Save(persistRecord);
-        return result;
-    }
-
-    public TraceableT<CheckoutUserResultDTO> CheckoutExistingCart(CustomerCart cart, Guid userId)
-    {
-        return from charge in _billingService.ChargeCustomer(cart.Id, userId)
-               select new CheckoutUserResultDTO
-               {
-                   UserId = userId,
-                   CartId = cart.Id,
-                   Charged = charge
-               };
-    }
-
-    internal User GetUserById(Guid userId)
-    {
-        throw new NotImplementedException();
+        return _dataAccess.GetCustomerById(customer.Id);
     }
 }

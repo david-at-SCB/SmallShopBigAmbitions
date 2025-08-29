@@ -1,8 +1,6 @@
 ﻿namespace SmallShopBigAmbitions.Models;
 
-public record Cart
+public record Cart(Guid Id, Guid CustomerId, Map<FakeStoreProduct, int> Items)
 {
-    public Guid Id { get; init; }
-    public Map<FakeStoreProduct, int> Items { get; init; } = Map<FakeStoreProduct, int>();
-    public Guid UserId { get; init; }
+    public static Cart Empty(Guid userId) => new(Guid.NewGuid(), userId, Map<FakeStoreProduct, int>());
 }

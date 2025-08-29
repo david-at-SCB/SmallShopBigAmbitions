@@ -11,13 +11,13 @@ public static class AuthorizationGuards
             : Fin<Unit>.Fail("Unauthorized: Admin role required.");
 
     public static Fin<Unit> EnsureTrusted(TrustedContext context) =>
-            context.IsTrusted
+        context.IsAuthenticated
             ? Fin<Unit>.Succ(Unit.Default)
-            : Fin<Unit>.Fail("Unauthorized: Caller is not trusted.");
+            : Fin<Unit>.Fail("Unauthorized: Caller is not authenticated.");
 
     public static Unit EnsureTrustedOrThrow(TrustedContext context)
     {
-        if (!context.IsTrusted)
+        if (!context.IsAuthenticated)
             throw new UnauthorizedAccessException("Untrusted context");
         return Unit.Default;
     }
@@ -36,6 +36,9 @@ public static class TraceableContextAttributes
         {
             new KeyValuePair<string, object>("UserId", context.CallerId),
             new KeyValuePair<string, object>("Role", context.Role),
-            new KeyValuePair<string, object>("IsTrusted", context.IsTrusted)
+            new KeyValuePair<string, object>("IsAuthenticated", context.IsAuthenticated),
+            new KeyValuePair<string, object>("JwtId", context.JwtId ?? string.Empty),
+            new KeyValuePair<string, object>("Issuer", context.Issuer ?? string.Empty),
+            new KeyValuePair<string, object>("ExpiresAt", context.ExpiresAt?.ToString("O") ?? string.Empty)
         };
 }

@@ -3,7 +3,7 @@
 public record ChargeResult(
  Option<string> Message,
  Guid Cart,
- Guid User,
+ Guid Customer,
  Guid Transaction,
  Guid Receipt
  );

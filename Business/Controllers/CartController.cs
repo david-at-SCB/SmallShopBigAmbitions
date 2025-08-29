@@ -20,19 +20,14 @@ public class CartController : ControllerBase
     [HttpGet("{userId}")]
     public async Task<IActionResult> GetCartForUser(Guid userId)
     {
-        var trustedContext = new TrustedContext
-        {
-            CallerId = Guid.NewGuid(), // Or extract from token
-            Role = "Service", // Or "Admin", etc.
-            Token = Request.Headers.Authorization.ToString()
-        };
+        var trustedContext = TrustedContextFactory.FromHttpContext(HttpContext);
 
-        var ct = new CancellationToken(); // Use a real CancellationToken in production. TODO:!
-        Fin<CustomerCart> result = await _dispatcher.Dispatch(new GetCartForUserQuery(userId), ct).RunAsync();
+        var ct = HttpContext.RequestAborted;
+        Fin<Cart> result = await _dispatcher.Dispatch(new GetCartForUserQuery(userId), ct).RunAsync();
 
         return result.Match<IActionResult>(
             Succ: cart => Ok(cart),
-            Fail: err => NotFound(new { error = err })
+            Fail: err => NotFound(new { error = err.Message })
         );
     }
 }

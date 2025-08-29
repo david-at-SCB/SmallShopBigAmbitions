@@ -1,4 +1,5 @@
 ﻿using SmallShopBigAmbitions.Models;
+using SmallShopBigAmbitions.Monads.TraceableTransformer;
 using static LanguageExt.Prelude;
 
 namespace SmallShopBigAmbitions.Database;
@@ -6,23 +7,27 @@ namespace SmallShopBigAmbitions.Database;
 
 public interface IDataAccess
 {
-    Cart GetUserCart(Guid User);
+    public TraceableT<Customer> GetCustomerById(Guid userId);
+    public Cart GetCustomerCart(Guid User);
 }
 
 public class DataAccess : IDataAccess
 {
-    public Cart GetUserCart(Guid UserId)
+    public TraceableT<Customer> GetCustomerById(Guid userId)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Cart GetCustomerCart(Guid UserId)
     {
         if (UserId == Guid.Empty)
         {
-            throw new Exception("User not found");
+            throw new Exception("Cannot create a Cart for non-existent customer");
         }
         else
-            return new Cart
-            {
-                Id = Guid.NewGuid(),
-                UserId = UserId,
-                Items = Map<FakeStoreProduct, int>()
-            };
+        {
+            // Create an empty cart for the given user
+            return Cart.Empty(UserId);
+        }
     }
 }

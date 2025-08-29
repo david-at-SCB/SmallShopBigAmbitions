@@ -1,4 +1,5 @@
 ﻿using LanguageExt;
+using LanguageExt.Traits;
 using static LanguageExt.Prelude;
 //using LanguageExt.Parallel;
 
@@ -22,6 +23,45 @@ public static class MyOptionExtensions
         o2.Bind(t2 =>
         o3.Bind(t3 =>
         o4.Map(t4 => f(t1, t2, t3, t4)))));
+}
+
+// Fix for CS1061: Ensure the correct type is used for the `Match` method call.
+// The error indicates that `Fin` does not have a `Match` method, but `Fin<T>` does.
+// Update the code to use the generic `Fin<T>` type.
+
+public static class IOFinLinqExtensions
+{
+    // Map over the inner Fin value
+    public static IO<Fin<B>> Select<T, B>(this IO<Fin<T>> ma, Func<T, B> f) =>
+        ma.Map(fin => fin.Map(f));
+
+    // Bind with a function that returns IO<Fin<B>> (propagate Fin failures)
+    public static IO<Fin<B>> SelectMany<T, B>(
+        this IO<Fin<T>> ma,
+        Func<T, IO<Fin<B>>> bind) =>
+        ma.Bind(finT =>
+            finT.Match(
+                Succ: t => bind(t),
+                Fail: error => IO<Fin<B>>.Pure(Fin<B>.Fail(error)) // Ensure proper type resolution
+            )
+        );
+
+    // Bind + project (propagate Fin failures and project T,B -> C)
+    public static IO<Fin<C>> SelectMany<T, B, C>(
+    this IO<Fin<T>> ma,
+    Func<T, IO<Fin<B>>> bind,
+    Func<T, B, C> project) =>
+    ma.Bind(finT =>
+        finT.Match(
+            Succ: t => bind(t).Map(finB =>
+                finB.Match(
+                    Succ: b => Fin<C>.Succ(project(t, b)),
+                    Fail: error => Fin<C>.Fail(error)
+                )
+            ),
+            Fail: error => IO<Fin<C>>.Pure(Fin<C>.Fail(error))
+        )
+    );
 }
 
 

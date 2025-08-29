@@ -2,9 +2,9 @@
 
 namespace SmallShopBigAmbitions.Application.Billing.CheckoutUser;
 
-public record CheckoutUserResultDTO
-{
-    public Guid UserId { get; init; }
-    public Guid CartId { get; init; }
-    public required Fin<ChargeResult> Charged { get; init; }
-}
+public record CheckoutUserResultDTO(Guid CustomerId, Models.Cart Cart, string Message, Fin<ChargeResult> Charged);
+//{
+//    public Guid UserId { get; init; }
+//    public Guid CartId { get; init; }
+//    public required Fin<ChargeResult> Charged { get; init; }
+//}

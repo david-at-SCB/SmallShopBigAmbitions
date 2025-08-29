@@ -1,8 +1,9 @@
 using SmallShopBigAmbitions.Application.Billing.CheckoutUser;
 using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.FunctionalDispatcher;
+using SmallShopBigAmbitions.Models;
 
 namespace SmallShopBigAmbitions.Application.Cart.AddItemsAndCheckout;
 
-public record AddItemsAndCheckoutCommand(Guid UserId, IEnumerable<string> Items)
+public record AddItemsToCartCommand(Guid CustomerId, Map<FakeStoreProduct, int> Items)
     : IFunctionalRequest<CheckoutUserResultDTO>;

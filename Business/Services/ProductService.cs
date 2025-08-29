@@ -1,4 +1,13 @@
-﻿using SmallShopBigAmbitions.HTTP;
+﻿// Async/IO checklist (Razor Pages + LanguageExt)
+// - Handlers return Task/Task<IActionResult>; always await RunTraceable(ct).RunAsync().
+// - Avoid .Run(), .Result, .Wait() on IO/Aff in web code.
+// - Accept and pass CancellationToken to all effects/HTTP calls.
+// - Services: expose composable TraceableT/IO; add Task wrappers (e.g., GetXAsync) for UI.
+// - Use Fin/Option for errors; handle via Match in handlers and return proper IActionResult.
+// - Map DTO -> domain in a mapper; keep IO layer DTO-focused.
+// - Ensure DI registers FunctionalHttpClient and service; no static singletons.
+// - Add .WithLogging and telemetry attributes where useful.
+using SmallShopBigAmbitions.HTTP;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
 using System.Text;
@@ -31,53 +40,26 @@ public class ProductService(FunctionalHttpClient http, ILogger<ProductService> l
      .WithAttributes(fin => HttpTelemetryAttributes.FromFin(fin, $"https://fakestoreapi.com/products/{id}"))
      .WithLogging(_logger);
 
-    public TraceableT<Fin<Seq<ProductDto>>> GetAllProducts(
-        int maxRetries = 3) =>
-        TraceableTExtensions.WithTracingAndRetry(
-            spanName: "ProductService.GetAllProducts",
-            effect: IO.liftAsync<Fin<Seq<ProductDto>>>(async () => // this IO effect is async?
-            {
-                var products = _http.GetJsonAsync<ProductDto[]>("https://fakestoreapi.com/products");
 
-                return products
-                    .Match<Fin<Seq<ProductDto>>>(
-                        ps => FinSucc(Seq(ps.AsEnumerable())),
-                        () => FinFail<Seq<ProductDto>>(Error.New("No products found"))
-                    );
-            }),
+    public TraceableT<Fin<Seq<ProductDto>>> GetAllProducts(int maxRetries = 3, CancellationToken ct = default)
+    {
+        const string uri = "https://fakestoreapi.com/products";
+
+        return TraceableTExtensions.WithTracingAndRetry(
+            spanName: "ProductService.GetAllProducts",
+            effect: _http.GetJsonFinAsync<ProductDto[]>(uri, ct)
+                .Map(fin => fin.Map(products => Seq(products.AsEnumerable()))),
             maxRetries: maxRetries
         )
-        .WithAttributes(fin => fin.Match<IEnumerable<KeyValuePair<string, object>>>(
-            Succ: seq =>
-            {
-                var count = seq.Fold(0, (acc, _) => acc + 1);
-                var titles = seq.Fold(new StringBuilder(), (sb, p) =>
-                {
-                    if (sb.Length > 0) sb.Append(", ");
-                    sb.Append(p.Title);
-                    return sb;
-                }).ToString();
-
-                return
-                [
-                    new KeyValuePair<string, object>("ProductCount", count),
-                    new KeyValuePair<string, object>("Description", titles)
-                ];
-            },
-            Fail: err =>
-            [
-                new KeyValuePair<string, object>("ProductCount", 0),
-                new KeyValuePair<string, object>("Error", err.Message)
-            ]
-        ))
+        .WithAttributes(fin => HttpTelemetryAttributes.FromFin(fin, uri))
         .WithLogging(_logger);
+    }
 
     internal async Task<List<FakeStoreProduct>> GetProductsAsync(CancellationToken ct)
     {
-        var bunchaProducts = GetAllProducts(maxRetries: 5) // await?
-            .RunTraceable(ct)
-            .Run();
-        return bunchaProducts.Match(
+        var fin = await GetAllProducts(maxRetries: 5, ct).RunTraceable(ct).RunAsync();
+
+        return fin.Match(
             Succ: products => [.. products.Map(p => new FakeStoreProduct(
                 Id: p.Id,
                 Title: p.Title,
@@ -88,7 +70,7 @@ public class ProductService(FunctionalHttpClient http, ILogger<ProductService> l
                 Rating: new FakeStoreRating(
                     Rate: p.RatingRate,
                     Count: p.RatingCount
-                    )
+                )
             ))],
             Fail: err =>
             {
