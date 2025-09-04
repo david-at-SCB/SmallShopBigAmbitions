@@ -3,7 +3,7 @@ using SmallShopBigAmbitions.FunctionalDispatcher;
 using System.Diagnostics;
 using SmallShopBigAmbitions.Auth;
 
-namespace SmallShopBigAmbitions.Application._Behaviours;
+namespace SmallShopBigAmbitions.Application._PipelineBehaviours;
 
 public class TracingBehavior<TRequest, TResponse> : IFunctionalPipelineBehavior<TRequest, TResponse>
     where TRequest : IFunctionalRequest<TResponse>

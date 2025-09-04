@@ -4,7 +4,7 @@ using LanguageExt;
 
 public sealed record PaymentIntent(
     Guid Id,
-    Guid CartId,
+    Guid CartId, // change to depend on ORDER. So we gotta have an ORDER before we can have a PaymentIntent
     Guid UserId,
     string Provider,
     string ProviderIntentId,

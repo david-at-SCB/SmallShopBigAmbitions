@@ -1,7 +1,7 @@
 ﻿namespace SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent;
 
 using LanguageExt;
-using SmallShopBigAmbitions.Application.Billing.Payments.CreateIntentToPay;
+using SmallShopBigAmbitions.Application._Abstractions;
 using static LanguageExt.Prelude;
 
 public sealed class PaymentProviderSelector : IPaymentProviderSelector

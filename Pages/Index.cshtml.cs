@@ -57,7 +57,7 @@ public class IndexModel : PageModel
                 Fail: err =>
                 {
                     var failure = Fin<Cart>.Fail(err);
-                    Cart = Option<Fin<Cart>>.Some(failure); // Fixed: Directly assign the failure to Cart
+                    Cart = Option<Fin<Cart>>.Some(failure);
                 }
             );
         }
@@ -76,7 +76,7 @@ public class IndexModel : PageModel
 
         var items = Cart.Match<Map<FakeStoreProduct, int>>(
             Some: finCart => finCart.Match(
-                Succ: cart => cart.Items,
+                Succ: cart => Map<FakeStoreProduct, int>(),
                 Fail: _ => Map<FakeStoreProduct, int>()
             ),
             None: () => Map<FakeStoreProduct, int>()
@@ -89,13 +89,8 @@ public class IndexModel : PageModel
 
         var result = await _dispatcher.Dispatch(cmd, ct).RunAsync();
 
-        // Fix: Use the result of Some in a conditional statement
         CheckoutResult = result.Match(
-            Succ: res =>
-            {
-                CheckoutResult = Option<Fin<CheckoutUserResultDTO>>.Some(res);
-                return CheckoutResult;
-            },
+            Succ: res => Option<Fin<CheckoutUserResultDTO>>.Some(res),
             Fail: err => Fin<CheckoutUserResultDTO>.Fail(err)
         );
 
@@ -124,7 +119,7 @@ public class IndexModel : PageModel
         // Now we can use the dispatcher to run the request. Here we also trace the request but also the trip through the dispatcher
         var result = await traceableRequest
             .Bind(req => TraceableTLifts.FromIO<Fin<string>>(
-                _dispatcher.Dispatch<string>(req, CancellationToken.None), // type mismatch! IO<Fin<string>> vs IO<string>
+                _dispatcher.Dispatch<string>(req, CancellationToken.None),
                 "DispatchHelloWorld"
             ))
             .RunTraceable(CancellationToken.None)
@@ -141,8 +136,6 @@ public class IndexModel : PageModel
 
     public async Task<IActionResult> OnPostGoToProducts()
     {
-        // how do I redirect to a different page in Razor Pages?
-        // Redirect to the Products page
         return RedirectToPage("/Products");
     }
 

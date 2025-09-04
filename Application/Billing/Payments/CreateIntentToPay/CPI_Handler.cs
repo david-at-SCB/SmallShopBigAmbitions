@@ -1,8 +1,10 @@
 ﻿namespace SmallShopBigAmbitions.Application.Billing.Payments.CreateIntentToPay;
 
 using LanguageExt;
+using SmallShopBigAmbitions.Application._Abstractions;
 using SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent;
 using SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent.Observability;
+using SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent.Repo;
 using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Models;
@@ -24,15 +26,15 @@ public sealed class CreateIntentToPayHandler(
     IPricingService pricing,
     IInventoryService inventory,
     IPaymentIntentRepository repo,
-    IIdempotencyStore idempotency,
+    _Abstractions.IIdempotencyStore idempotency,
     IFunctionalDispatcher dispatcher,
-    IEventPublisher events) : IFunctionalHandler<CreateIntentToPayCommand, IntentToPayDto>
+    IEventPublisher events) : IFunctionalHandler<IntentToPayCommand, IntentToPayDto>
 {
     private readonly CreateIntentToPayPolicy _policy = policy;
     private readonly IPricingService _pricing = pricing;
     private readonly IInventoryService _inventory = inventory;
     private readonly IPaymentIntentRepository _repo = repo;
-    private readonly IIdempotencyStore _idempotency = idempotency;
+    private readonly _Abstractions.IIdempotencyStore _idempotency = idempotency;
     private readonly IFunctionalDispatcher _dispatcher = dispatcher;
     private readonly IEventPublisher _events = events;
 
@@ -50,50 +52,60 @@ public sealed class CreateIntentToPayHandler(
     );
 
     /// <summary>
-    /// Primary function stack: authorization -> idempotency pre-check -> policy check
-    /// -> totals -> reserve -> provider intent -> persist -> save idempotency -> publish -> DTO.
-    /// Each step is traced and returns Fin; the first failure short-circuits the pipeline.
+    /// Primary function stack: authorization -> policy check -> totals -> reserve -> provider intent -> persist -> publish -> DTO.
+    /// Idempotency is applied around the side-effects section when a key is provided.
     /// </summary>
-    public IO<Fin<IntentToPayDto>> Handle(CreateIntentToPayCommand request, TrustedContext context, CancellationToken ct)
+    public IO<Fin<IntentToPayDto>> Handle(IntentToPayCommand request, TrustedContext context, CancellationToken ct)
     {
-        var flow =
-            RequireTrustedT(context) // Authorization check
+        // PRE: auth -> policy -> totals (pure-ish work)
+        var pre =
+            RequireTrustedT(context)
             .Bind(authFin => authFin.Match(
-                Succ: _ => IdempotencyCheckT(request),
-                Fail: e => TraceableTLifts.FromFin(Fin<Unit>.Fail(e), "auth.failed", fin => ErrorAttrs(fin))
-            ))
-            .Bind(_ => PolicyCheckStep(request)) // Ensure cart + provider + inventory are valid for processing
+                Succ: _ => PolicyCheckStep(request),
+                Fail: e => TraceableTLifts.FromFin(Fin<FlowState>.Fail(e), "auth.failed", ErrorAttrs)))
             .Bind(stateFin => stateFin.Match(
-                Succ: state => TotalsStep(state), // Shipping, discounts, tax -> Total
-                Fail: e => TraceableTLifts.FromFin(Fin<FlowState>.Fail(e), ActivityNames.PricingCalculate + ".skip", fin => ErrorAttrs(fin))
-            ))
-            .Bind(stateFin => stateFin.Match(
-                Succ: state => ReserveInventoryStep(state), // Reserve inventory for TTL
-                Fail: e => TraceableTLifts.FromFin(Fin<FlowState>.Fail(e), ActivityNames.InventoryReserve + ".skip", fin => ErrorAttrs(fin))
-            ))
-            .Bind(stateFin => stateFin.Match(
-                Succ: state => ProviderIntentStep(request, state), // Ask provider (e.g., Stripe) to create its intent
-                Fail: e => TraceableTLifts.FromFin(Fin<FlowState>.Fail(e), ActivityNames.ProviderCreateIntent + ".skip", fin => ErrorAttrs(fin))
-            ))
-            .Bind(stateFin => stateFin.Match(
-                Succ: state => PersistIntentStep(request, state), // Persist our domain PaymentIntent
-                Fail: e => TraceableTLifts.FromFin(Fin<FlowState>.Fail(e), ActivityNames.PersistPaymentIntent + ".skip", fin => ErrorAttrs(fin))
-            ))
-            .Bind(stateFin => stateFin.Match(
-                Succ: state => SaveIdempotencyStep(request, state), // Store idempotency key -> intent id
-                Fail: e => TraceableTLifts.FromFin(Fin<FlowState>.Fail(e), "idempotency.save.skip", fin => ErrorAttrs(fin))
-            ))
-            .Bind(stateFin => stateFin.Match(
-                Succ: state => PublishEventStep(state), // Notify other bounded contexts/services
-                Fail: e => TraceableTLifts.FromFin(Fin<FlowState>.Fail(e), "event.publish.skip", fin => ErrorAttrs(fin))
-            ))
-            .Map(stateFin => stateFin.Match( // Project to a thin DTO for the outside world
-                Succ: state => Fin<IntentToPayDto>.Succ(Mapping.ToDto(state.Intent!, state.ProviderIntent!.ProviderMetadata)),
-                Fail: e => Fin<IntentToPayDto>.Fail(e)
-            ));
+                Succ: s => TotalsStep(s),
+                Fail: e => TraceableTLifts.FromFin(Fin<FlowState>.Fail(e), "pricing.skip", ErrorAttrs)));
 
-        return flow.RunTraceable(ct);
+        // Side-effects section composed as IO<Fin<FlowState>>
+        IO<Fin<FlowState>> sideEffects(FlowState s2) =>
+            ReserveInventoryStep(s2).RunTraceable(ct)
+                .Bind(s3Fin => s3Fin.Match(
+                    Succ: s => ProviderIntentStep(request, s).RunTraceable(ct),
+                    Fail: e => IO.lift<Fin<FlowState>>(() => Fin<FlowState>.Fail(e))
+                ))
+                .Bind(s4Fin => s4Fin.Match(
+                    Succ: s => PersistIntentStep(request, s).RunTraceable(ct),
+                    Fail: e => IO.lift<Fin<FlowState>>(() => Fin<FlowState>.Fail(e))
+                ))
+                .Bind(s5Fin => s5Fin.Match(
+                    Succ: s => PublishEventStep(s).RunTraceable(ct),
+                    Fail: e => IO.lift<Fin<FlowState>>(() => Fin<FlowState>.Fail(e))
+                ));
+
+        // Run pre-section, then wrap side-effects with idempotency if a key is provided
+        return pre.RunTraceable(ct).Bind(preFin => preFin.Match(
+            Succ: s2 =>
+            {
+                var ttl = TimeSpan.FromMinutes(15);
+
+                // Prefer CartId for determinism
+                var scope = $"payments:{request.CartId}:intent";
+                var key = request.IdempotencyKey ?? string.Empty;
+                var fingerprint = $"{request.CartId}|{request.Method}|{s2.Total!.Amount:0.00}|{s2.Total.Currency}";
+
+                var effect = sideEffects(s2);
+
+                IO<Fin<FlowState>> guarded = string.IsNullOrWhiteSpace(request.IdempotencyKey)
+                    ? effect
+                    : IdempotencyOps.WithIdempotency(_idempotency, scope, key, fingerprint, ttl, effect, ct);
+
+                return guarded.Map(fin => fin.Map(s => Mapping.ToDto(s.Intent!, s.ProviderIntent!.ProviderMetadata)));
+            },
+            Fail: e => IO.lift<Fin<IntentToPayDto>>(() => Fin<IntentToPayDto>.Fail(e))
+        ));
     }
+
 
     // ---------------- Steps (each returns a traced IO<Fin<...>>) ----------------
 
@@ -103,14 +115,8 @@ public sealed class CreateIntentToPayHandler(
             AuthorizationGuards.RequireTrustedFin(context),
             spanName: "auth.require_trusted");
 
-    /// <summary>Idempotency pre-check. If key exists → fail; else succeed.</summary>
-    private TraceableT<Fin<Unit>> IdempotencyCheckT(CreateIntentToPayCommand request) =>
-        TraceableTLifts.FromIOFinRawTracableT(
-            TryGetIdempotent(request),
-            spanName: "idempotency.check");
-
     /// <summary>Validate cart snapshot, provider resolution, and inventory availability.</summary>
-    private TraceableT<Fin<FlowState>> PolicyCheckStep(CreateIntentToPayCommand request) =>
+    private TraceableT<Fin<FlowState>> PolicyCheckStep(IntentToPayCommand request) =>
         TraceableTLifts
             .FromIOFinRawTracableT(_policy.Check(request), ActivityNames.PaymentCreateIntent)
             .WithAttributes(fin => MakePolicyAttrs(fin, request))
@@ -142,13 +148,13 @@ public sealed class CreateIntentToPayHandler(
     {
         var reservationId = Guid.NewGuid();
         var ttl = TimeSpan.FromMinutes(15);
-        return TraceableTLifts.FromIOFinRawTracableT(_inventory.Reserve(state.Cart.Items, reservationId, ttl), ActivityNames.InventoryReserve)
+        return TraceableTLifts.FromIOFinRawTracableT(_inventory.Reserve(state.Cart, reservationId, ttl), ActivityNames.InventoryReserve)
             .WithAttributes(fin => ReserveAttrs(fin, reservationId))
             .Map(resFin => resFin.Map(_ => state with { ReservationId = reservationId, Ttl = ttl }));
     }
 
     /// <summary>Create provider-specific intent (e.g., Stripe). Maps failures to ProviderFailed.</summary>
-    private static TraceableT<Fin<FlowState>> ProviderIntentStep(CreateIntentToPayCommand request, FlowState state) =>
+    private static TraceableT<Fin<FlowState>> ProviderIntentStep(IntentToPayCommand request, FlowState state) =>
         TraceableTLifts
             .FromIOFinRawTracableT(
                 state.Total is null
@@ -169,7 +175,7 @@ public sealed class CreateIntentToPayHandler(
             ));
 
     /// <summary>Persist our domain PaymentIntent and tag persisted properties on success.</summary>
-    private TraceableT<Fin<FlowState>> PersistIntentStep(CreateIntentToPayCommand request, FlowState state)
+    private TraceableT<Fin<FlowState>> PersistIntentStep(IntentToPayCommand request, FlowState state)
     {
         var intent = new PaymentIntent(
             Id: Guid.NewGuid(),
@@ -193,14 +199,6 @@ public sealed class CreateIntentToPayHandler(
             .Map(insFin => insFin.Map(_ => state with { Intent = intent }))
             .WithAttributes(flowState => PersistAttrs(flowState, intent));
     }
-
-    /// <summary>Store idempotency key → intent id mapping if provided; no-op otherwise.</summary>
-    private TraceableT<Fin<FlowState>> SaveIdempotencyStep(CreateIntentToPayCommand request, FlowState state) =>
-        request.IdempotencyKey is null
-            ? TraceableTLifts.FromFin(Fin<Unit>.Succ(unit), "idempotency.save.skip", fin => ErrorAttrs(fin))
-                .Map(_ => Fin<FlowState>.Succ(state))
-            : TraceableTLifts.FromIOFinRawTracableT(_idempotency.Put(request.IdempotencyKey, state.Intent!.Id), "idempotency.save")
-                .Map(_ => Fin<FlowState>.Succ(state));
 
     /// <summary>Publish an integration/domain event for downstream consumers.</summary>
     private TraceableT<Fin<FlowState>> PublishEventStep(FlowState state) =>
@@ -233,7 +231,7 @@ public sealed class CreateIntentToPayHandler(
         return new Money(preTax.Currency, preTax.Amount + tax.Amount);
     }
 
-    private static IEnumerable<KeyValuePair<string, object>> MakePolicyAttrs(Fin<(CartSnapshot Cart, IPaymentProvider Provider)> fin, CreateIntentToPayCommand request) =>
+    private static IEnumerable<KeyValuePair<string, object>> MakePolicyAttrs(Fin<(CartSnapshot Cart, IPaymentProvider Provider)> fin, IntentToPayCommand request) =>
         fin.Match(
             Succ: chk =>
             [
@@ -276,13 +274,4 @@ public sealed class CreateIntentToPayHandler(
             ],
             Fail: _ => Enumerable.Empty<KeyValuePair<string, object>>()
         );
-
-    private IO<Fin<Unit>> TryGetIdempotent(CreateIntentToPayCommand cmd) =>
-        cmd.IdempotencyKey == null
-            ? IO.lift<Fin<Unit>>(() => Fin<Unit>.Succ(unit))
-            : _idempotency.TryGet(cmd.IdempotencyKey)
-                .Map(fin => fin.Bind(opt => opt.Match(
-                    Some: _ => Fin<Unit>.Fail(PaymentErrors.IdempotentConflict),
-                    None: () => Fin<Unit>.Succ(unit)
-                )));
 }

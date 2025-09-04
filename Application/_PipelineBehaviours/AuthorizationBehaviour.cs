@@ -3,7 +3,7 @@ using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using System.Linq;
 
-namespace SmallShopBigAmbitions.Application._Behaviours;
+namespace SmallShopBigAmbitions.Application._PipelineBehaviours;
 
 public class AuthorizationBehavior<TRequest, TResponse> : IFunctionalPipelineBehavior<TRequest, TResponse>
     where TRequest : IFunctionalRequest<TResponse>

@@ -2,7 +2,7 @@
 using LanguageExt;
 using SmallShopBigAmbitions.Auth;
 
-namespace SmallShopBigAmbitions.Application._Behaviours;
+namespace SmallShopBigAmbitions.Application._PipelineBehaviours;
 
 public class LoggingBehavior<TRequest, TResponse> : IFunctionalPipelineBehavior<TRequest, TResponse>
     where TRequest : IFunctionalRequest<TResponse>

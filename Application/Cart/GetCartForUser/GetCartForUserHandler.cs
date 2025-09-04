@@ -17,21 +17,14 @@ public class GetCartForUserHandler : IFunctionalHandler<GetCartForUserQuery, Mod
         _logger = logger;
     }
 
-
-
-    public IO<Fin<Models.Cart>> Handle(GetCartForUserQuery request,TrustedContext context, CancellationToken ct)
+    public IO<Fin<Models.Cart>> Handle(GetCartForUserQuery request, TrustedContext context, CancellationToken ct)
     {
         return
-            from _ in AuthorizationGuards.RequireTrustedORThrow(context) // RquireTrusted isnt recognized? CS0130
+            from _ in AuthorizationGuards.RequireTrustedORThrow(context)
             from cart in _cartService.GetCartForUser(request.UserId)
-            .WithSpanName("GetCartForUser")
-            .WithLogging(_logger)
-            //.Map(cart =>
-            //     cart == null
-            //     ? Fin<Models.Cart>.Fail("Cart not found or empty")
-            //     : Fin<Models.Cart>.Succ(cart))
-            .RunTraceableFin(ct)
+                .WithSpanName("GetCartForUser")
+                .WithLogging(_logger)
+                .RunTraceableFin(ct)
             select cart;
     }
-
 }

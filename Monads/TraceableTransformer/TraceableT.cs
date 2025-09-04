@@ -1,7 +1,6 @@
-﻿using LanguageExt;
+﻿using SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent;
+using SmallShopBigAmbitions.Monads.Traceable;
 using SmallShopBigAmbitions.TracingSources;
-using System.Collections.Immutable;
-using System.Diagnostics;
 
 namespace SmallShopBigAmbitions.Monads.TraceableTransformer;
 
@@ -86,6 +85,8 @@ public record TraceableT<A>(
             SpanName: SpanName + ".Bind",
             Attributes: b => [] // modern syntax
         );
+
+   
 }
 
 public static class TraceableTExtensions
@@ -95,9 +96,16 @@ public static class TraceableTExtensions
         IO<Fin<T>> effect,
         int maxRetries,
         TimeSpan? delay = null
-    ) =>
+        ) =>
         new(
             Effect: RetryIO.WithRetry(effect, maxRetries, delay ?? TimeSpan.FromMilliseconds(200)),
             SpanName: spanName
         );
+
+    public static TraceableT<Fin<T>> WithTracing<T>(
+        string spanName,
+        IO<Fin<T>> effect
+        ) =>
+        new(effect, spanName);
+
 }

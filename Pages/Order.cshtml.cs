@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
 using SmallShopBigAmbitions.Auth;
@@ -5,6 +6,10 @@ using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Models.Mappers.ProductAPIToProductBusiness;
+using SmallShopBigAmbitions.Application.Billing.Payments.CreateIntentToPay; // IntentToPayDto
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Security.Cryptography;
 
 namespace SmallShopBigAmbitions.Pages;
 
@@ -20,17 +25,22 @@ public class OrderModel : PageModel
 {
     private readonly IFunctionalDispatcher _dispatcher;
     private readonly ProductService _ProductService;
+    private readonly IHttpClientFactory _httpClientFactory;
 
-    public OrderModel(IFunctionalDispatcher mediator, ProductService ProductService)
+    public OrderModel(IFunctionalDispatcher mediator, ProductService ProductService, IHttpClientFactory httpClientFactory)
     {
         _dispatcher = mediator;
         _ProductService = ProductService;
+        _httpClientFactory = httpClientFactory;
     }
 
     public Fin<Cart> Cart { get; private set; }
 
     // Expose selected product details (from ProductDetails page) on Order page if needed
     public Option<FakeStoreProduct> SelectedProduct { get; private set; }
+
+    [TempData]
+    public string? PaymentIntentKey { get; set; }
 
     public async Task OnGetAsync(Guid userId, int productId, CancellationToken ct)
     {
@@ -46,5 +56,46 @@ public class OrderModel : PageModel
             Succ: dto => Mapper.MapToBusinessProduct(dto),
             Fail: _ => Option<FakeStoreProduct>.None
         );
+    }
+
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> OnPostCreatePaymentIntentAsync(Guid userId, Guid cartId, string currency = "SEK", string? shippingAddress = null, CancellationToken ct = default)
+    {
+        // Generate once and reuse across retries; persist in TempData
+        if (string.IsNullOrWhiteSpace(PaymentIntentKey))
+        {
+            PaymentIntentKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
+        }
+
+        var query = $"/api/Billing/payment_intent?UserId={userId}&CartId={cartId}&Currency={currency}" +
+                    (string.IsNullOrWhiteSpace(shippingAddress) ? string.Empty : $"&ShippingAddress={Uri.EscapeDataString(shippingAddress)}");
+
+        var client = _httpClientFactory.CreateClient();
+        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        using var req = new HttpRequestMessage(HttpMethod.Get, new Uri(new Uri(baseUrl), query));
+        req.Headers.Add("Idempotency-Key", PaymentIntentKey);
+
+        using var resp = await client.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            // Keep key for retry and surface error on page
+            ModelState.AddModelError(string.Empty, $"Failed to create payment intent: {(int)resp.StatusCode} {resp.ReasonPhrase}");
+            return Page();
+        }
+
+        // Optional: parse intent DTO if the UI needs it
+        var dto = await resp.Content.ReadFromJsonAsync<IntentToPayDto>(cancellationToken: ct);
+        if (dto is null)
+        {
+            ModelState.AddModelError(string.Empty, "Payment intent created but response was empty.");
+            return Page();
+        }
+
+        // If you need the client secret on the page, store it in TempData or ViewData here.
+        ViewData["PaymentProvider"] = dto.Provider;
+        ViewData["PaymentClientSecret"] = dto.ClientSecret;
+        ViewData["PaymentIntentId"] = dto.PaymentIntentId;
+
+        return Page();
     }
 }

@@ -9,7 +9,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
-using SmallShopBigAmbitions.Application._Behaviours;
+using SmallShopBigAmbitions.Application._PipelineBehaviours;
 using SmallShopBigAmbitions.Application._Policy;
 using SmallShopBigAmbitions.Application.Billing.ChargeCustomer;
 using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
@@ -28,7 +28,11 @@ using System.Diagnostics;
 using System.Security.Claims;
 using System.Text;
 using SmallShopBigAmbitions.Application.Billing.Payments.CreateIntentToPay; // IEventPublisher
-using SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent.Repo; // Sqlite repo/idempotency impls
+using SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent.Repo;
+using SmallShopBigAmbitions.Application.Orders;
+using SmallShopBigAmbitions.Application.Billing.Payments;
+using SmallShopBigAmbitions.Database.Idempotency;
+using SmallShopBigAmbitions.Application._Abstractions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -124,7 +128,7 @@ builder.Services.AddScoped<IIdempotencyStore>(sp =>
     Directory.CreateDirectory(dbDir);
     var path = Path.Combine(dbDir, "shop.db");
     var cs = $"Data Source={path}";
-    return new SmallShopBigAmbitions.Application.Billing.Payments.CreateIntentToPay.Repo.SqliteIdempotencyStore(cs);
+    return new SmallShopBigAmbitions.Database.Idempotency.SqliteIdempotencyStore(cs);
 });
 
 // Seeder
@@ -194,9 +198,15 @@ builder.Services.AddScoped<TrustedContext>(provider =>
 builder.Services.AddFunctionalHandlerWithPolicy<ChargeCustomerCommand, ChargeResult, ChargeCustomerHandler, ChargeCustomerPolicy>();
 builder.Services.AddFunctionalHandlerWithPolicy<GetCartForUserQuery, Cart, GetCartForUserHandler, GetCartForUserPolicy>();
 builder.Services.AddFunctionalHandlerWithPolicy<HelloWorldRequest, string, HelloWorldHandler, HelloWorldPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<CreateOrderCommand, OrderSnapshot, CreateOrderHandler, CreateOrderPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<AuthorizePaymentCommand, IntentToPayDto, AuthorizePaymentHandler, AuthorizePaymentPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<CapturePaymentCommand, Unit, CapturePaymentHandler, CapturePaymentPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<RefundPaymentCommand, Unit, RefundPaymentHandler, RefundPaymentPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<ApplyCreditCommand, Unit, ApplyCreditHandler, ApplyCreditPolicy>();
 builder.Services.AddScoped(typeof(IAuthorizationPolicy<>), typeof(AdminOnlyPolicy<>));
 builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(AuthorizationBehavior<,>));
 builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
 ////// ------ FUNCTIONAL DISPATCHER
 
 builder.Services.AddRazorPages();

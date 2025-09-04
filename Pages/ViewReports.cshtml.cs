@@ -22,13 +22,10 @@ namespace SmallShopBigAmbitions.Pages
             _dispatcher = dispatcher;
         }
 
-        //public Fin<ReportService.Report> Reports { get; private set; }
-
-        public async Task OnGetAsync(Guid userId, TrustedContext context, CancellationToken ct)
+        public async Task OnGetAsync(Guid userId, CancellationToken ct)
         {
+            var trustedContext = TrustedContextFactory.FromHttpContext(HttpContext);
             var cart = await _dispatcher.Dispatch(new GetCartForUserQuery(userId), ct).RunAsync();
-            //Simulating a report generation
-            // Reports = await _mediator.Send(new GetReportsQuery(userId, trustedContext), ct);
         }
     }
 }

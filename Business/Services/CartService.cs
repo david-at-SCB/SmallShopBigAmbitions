@@ -7,19 +7,23 @@
 // - Map DTO -> domain in a mapper; keep IO layer DTO-focused.
 // - Ensure DI registers FunctionalHttpClient and service; no static singletons.
 // - Add .WithLogging and telemetry attributes where useful.
-using Microsoft.AspNetCore.Http.Features;
-using SmallShopBigAmbitions.Application.Billing.CheckoutUser;
-using SmallShopBigAmbitions.Application.Cart.AddItemToCart;
 using SmallShopBigAmbitions.Database;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
-using SmallShopBigAmbitions.TracingSources;
 using LanguageExt;
-using static LanguageExt.Prelude;
 
 namespace SmallShopBigAmbitions.Business.Services;
 
-public class CartService(ILogger<CartService> logger, IDataAccess _dtAccss)
+public interface ICartService
+{
+    TraceableT<Cart> GetCartForUser(Guid userId);
+
+    TraceableT<Cart> AddItems(Cart cart, HashMap<ProductId, CartLine> items);
+
+    Cart GetCartByUserId(Guid userId);
+}
+
+public class CartService(ILogger<CartService> logger, IDataAccess _dtAccss) : ICartService
 {
     private readonly ILogger<CartService> _logger = logger;
     private readonly IDataAccess _DataAccess = _dtAccss;
@@ -36,56 +40,49 @@ public class CartService(ILogger<CartService> logger, IDataAccess _dtAccss)
             [
                 new KeyValuePair<string, object>("cart.id", cart.Id),
                 new KeyValuePair<string, object>("user.id", cart.CustomerId),
-                new KeyValuePair<string, object>("cart.item.count", cart.Items.Count)
+                new KeyValuePair<string, object>("cart.item.count", cart.Lines.Count)
             ]
         ).WithLogging(_logger);
 
         return tracedCart;
     }
 
-    // Merge the provided items into the cart's items map
-    public TraceableT<Cart> AddItems(Cart cart, Map<FakeStoreProduct, int> items)
+    // Merge the provided items into the cart's lines map (sum quantities for duplicates)
+    public TraceableT<Cart> AddItems(Cart cart, HashMap<ProductId, CartLine> items)
     {
         return TraceableTLifts.FromIO(
-            IO.lift(() => cart with
+            IO.lift(() =>
             {
-                Items = cart.Items + items
+                var toAdd = items.Fold(new HashMap<ProductId, CartLine>(), (acc, kv) =>
+                {
+                    var product = kv.ProductId; 
+                    var quantity = kv.Quantity;
+                    var price = kv.UnitPrice;
+
+                    var pid = new ProductId(Guid.NewGuid()); // TODO map FakeStoreProduct -> ProductId
+                    var existing = cart.Lines.Find(pid).Match(l => l.Quantity, () => 0);
+                    return acc.Add(pid, new CartLine(pid, existing + quantity, price));
+                });
+                return cart with { Lines = cart.Lines + toAdd };
             }),
             spanName: "cart.add_items",
             attributes: c =>
             [
                 new KeyValuePair<string, object>("cart.id", c.Id),
-                new KeyValuePair<string, object>("user.id", c.CustomerId),
-                new KeyValuePair<string, object>("cart.item.count", c.Items.Count)
+                new KeyValuePair<string, object>("customer.id", c.CustomerId),
+                new KeyValuePair<string, object>("cart.item.count", c.Lines.Count)
             ]
         ).WithLogging(_logger);
     }
 
-    public static TraceableT<Cart> GetCartForUser_first_iteration(Guid userId, ILogger logger)
+    public Cart GetCartByUserId(Guid customerId) => _DataAccess.GetCustomerCart(customerId);
+
+    internal static Cart GetCartByCartId(Guid cartId)
     {
-        return new TraceableT<Cart>(
-            Effect: IO.lift(() =>
-            {
-                Thread.Sleep(1500); // Simulate DB or API call
-                return Cart.Empty(userId);
-            }),
-            SpanName: "CartService.GetCartForUser",
-            Attributes: cart =>
-            [
-                new KeyValuePair<string, object>("cart.id", cart.Id),
-                new KeyValuePair<string, object>("user.id", cart.CustomerId),
-                new KeyValuePair<string, object>("cart.item.count", cart.Items.Count)
-            ]
-        ).WithLogging(logger);
+        throw new NotImplementedException();
     }
 
-    internal Cart GetCartByUserId(Guid userId)
-    {
-        // TODO: Trace?
-        return _DataAccess.GetCustomerCart(userId);
-    }
-
-    internal static Cart GetCartById(Guid cartId)
+    public TraceableT<Cart> AddItems(Cart cart, Map<FakeStoreProduct, int> items)
     {
         throw new NotImplementedException();
     }

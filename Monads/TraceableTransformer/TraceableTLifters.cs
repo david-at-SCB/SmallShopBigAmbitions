@@ -4,6 +4,44 @@ namespace SmallShopBigAmbitions.Monads.TraceableTransformer;
 
 public static class TraceableTLifts
 {
+    public static TraceableT<Fin<T>> FromFin<T>(
+            Fin<T> fin,
+            string spanName,
+            Func<Fin<T>, IEnumerable<KeyValuePair<string, object>>>? attributes) =>
+                new(IO.lift<Fin<T>>(() => fin), spanName, attributes);
+
+    /// <summary>
+    /// Overload: accept HashMap attributes for Fin<T>.
+    /// </summary>
+    public static TraceableT<Fin<T>> FromFin<T>(
+        Fin<T> fin,
+        string spanName,
+        Func<Fin<T>, HashMap<string, object>> attributes) =>
+            new(IO.lift<Fin<T>>(() => fin), spanName, a => attributes(a));
+
+    /// <summary>
+    /// Overload: accept ImmutableDictionary attributes for Fin<T>.
+    /// </summary>
+    public static TraceableT<Fin<T>> FromFin<T>(
+        Fin<T> fin,
+        string spanName,
+        Func<Fin<T>, ImmutableDictionary<string, object>> attributes) =>
+            new(IO.lift<Fin<T>>(() => fin), spanName, a => attributes(a));
+
+    public static TraceableT<T> FromFinUnwrapped<T>(
+            Fin<T> fin,
+            string spanName,
+            Func<T, IEnumerable<KeyValuePair<string, object>>> attributes)
+    {
+        var unwrappedFinInNewTraceable = fin.Match<TraceableT<T>>(
+            Succ: finValue =>
+                            new TraceableT<T>(IO.lift(() => finValue), spanName, attributes),
+            Fail: finError =>
+                            new TraceableT<T>(IO.lift(() => FinFail<T>(finError).ThrowIfFail()), spanName, _ => []));
+
+        return unwrappedFinInNewTraceable;
+    }
+
     /// <summary>
     /// Lift any IO<A> into a TraceableT<A> monad. This allows you to trace the execution of the IO operation, and this method creates a new span for the operation.
     /// </summary>
@@ -27,24 +65,26 @@ public static class TraceableTLifts
         Func<A, HashMap<string, object>> attributes) =>
         new(effect, spanName, a => attributes(a));
 
-    /// <summary>
-    /// Overload: accept attributes as an ImmutableDictionary for unique-key semantics.
-    /// </summary>
-    public static TraceableT<A> FromIO<A>(
-        IO<A> effect,
-        string spanName,
-        Func<A, ImmutableDictionary<string, object>> attributes) =>
-        new(effect, spanName, a => attributes(a));
+   
+    public static TraceableT<T> FromIO<T>(IO<T> io, string spanName) =>
+        new(io, spanName);
 
-    public static IO<Fin<A>> ToFinFromInnerSuccess<A>(this TraceableT<A> traceable, CancellationToken ct, Func<A, Fin<bool>> successSelector)
-    {
-        return traceable.RunTraceable(ct).Map(result =>
-            successSelector(result).Match(
-                Succ: _ => Fin<A>.Succ(result),
-                Fail: err => Fin<A>.Fail(err)
-            )
+    public static TraceableT<Fin<T>> FromIOFinRawTracableT<T>(IO<Fin<T>> io, string spanName) =>
+        new(io, spanName);
+
+    // Explicit names to avoid overload confusion, suffixed with TracableT
+    public static TraceableT<A> FromIOFinThrowingTracableT<A>(
+        IO<Fin<A>> effect,
+        string spanName,
+        Func<A, IEnumerable<KeyValuePair<string, object>>>? attributes = null) =>
+        FromIO(
+            IO.lift<A>(() => effect.Run().ThrowIfFail()),
+            spanName,
+            attributes
         );
-    }
+
+    public static TraceableT<T> FromValue<T>(T value, string spanName) =>
+        new(IO.lift(() => value), spanName);
 
     public static IO<Fin<A>> RunTraceableFin<A>(this TraceableT<A> traceable, CancellationToken ct) =>
         IO<Fin<A>>.Lift(() =>
@@ -61,47 +101,13 @@ public static class TraceableTLifts
             }
         });
 
-    // Explicit names to avoid overload confusion, suffixed with TracableT
-    public static TraceableT<A> FromIOFinThrowingTracableT<A>(
-        IO<Fin<A>> effect,
-        string spanName,
-        Func<A, IEnumerable<KeyValuePair<string, object>>>? attributes = null) =>
-        FromIO(
-            IO.lift<A>(() => effect.Run().ThrowIfFail()),
-            spanName,
-            attributes
+    public static IO<Fin<A>> ToFinFromInnerSuccess<A>(this TraceableT<A> traceable, CancellationToken ct, Func<A, Fin<bool>> successSelector)
+    {
+        return traceable.RunTraceable(ct).Map(result =>
+            successSelector(result).Match(
+                Succ: _ => Fin<A>.Succ(result),
+                Fail: err => Fin<A>.Fail(err)
+            )
         );
-
-    public static TraceableT<T> FromIO<T>(IO<T> io, string spanName) =>
-        new(io, spanName);
-
-    public static TraceableT<Fin<T>> FromIOFinRawTracableT<T>(IO<Fin<T>> io, string spanName) =>
-        new(io, spanName);
-
-    public static TraceableT<Fin<T>> FromFin<T>(
-        Fin<T> fin,
-        string spanName,
-        Func<Fin<T>, IEnumerable<KeyValuePair<string, object>>>? attributes) =>
-            new(IO.lift<Fin<T>>(() => fin), spanName, attributes);
-
-    /// <summary>
-    /// Overload: accept HashMap attributes for Fin<T>.
-    /// </summary>
-    public static TraceableT<Fin<T>> FromFin<T>(
-        Fin<T> fin,
-        string spanName,
-        Func<Fin<T>, HashMap<string, object>> attributes) =>
-            new(IO.lift<Fin<T>>(() => fin), spanName, a => attributes(a));
-
-    /// <summary>
-    /// Overload: accept ImmutableDictionary attributes for Fin<T>.
-    /// </summary>
-    public static TraceableT<Fin<T>> FromFin<T>(
-        Fin<T> fin,
-        string spanName,
-        Func<Fin<T>, ImmutableDictionary<string, object>> attributes) =>
-            new(IO.lift<Fin<T>>(() => fin), spanName, a => attributes(a));
-
-    public static TraceableT<T> FromValue<T>(T value, string spanName) =>
-        new(IO.lift(() => value), spanName);
+    }
 }
