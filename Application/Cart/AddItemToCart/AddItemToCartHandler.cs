@@ -29,7 +29,7 @@ public class AddItemToCartHandler(
                     .Bind(prodFin => prodFin.Match(
                         Succ: dto =>
                         {
-                            var businessroduct = Mapper.MapToBusinessProduct(dto);
+                            var businessProduct = Mapper.MapToBusinessProduct(dto);
                             // Build additions as HashMap<ProductId,CartLine>
                             var pid = new ProductId(Guid.NewGuid()); // TODO: stable mapping external->internal
                             var line = new CartLine(pid, request.Quantity, request.PriceSnapshot);
