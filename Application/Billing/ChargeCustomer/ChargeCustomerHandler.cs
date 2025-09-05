@@ -21,16 +21,18 @@ public class ChargeCustomerHandler : IFunctionalHandler<ChargeCustomerCommand, C
 
     public IO<Fin<ChargeResult>> Handle(ChargeCustomerCommand request, TrustedContext context, CancellationToken ct)
     {
-        // Get cart then charge; errors inside services are surfaced as Fin failures
-        var flow = _cartService
-            .GetCartForUser(request.UserId) // there should already be a cart in the command right?
-            .Bind(cart => _billingService
-                .ChargeCustomer(cart)
-                .RequireTrusted(context)
-                .WithSpanName("ChargeCustomer")
-                .WithLogging(_logger));
+        var flow =
+            from cartFin in _cartService.GetCartForUser(request.UserId)
+            from chargeFin in cartFin.Match(
+                Succ: cart => _billingService
+                    .ChargeCustomer(cart)
+                    .RequireTrusted(context)
+                    .WithSpanName("ChargeCustomer")
+                    .WithLogging(_logger),
+                Fail: e => TraceableTLifts.FromFin(Fin<ChargeResult>.Fail(e), "charge.skip", _ => [])
+            )
+            select chargeFin;
 
-        // flow is TraceableT<Fin<ChargeResult>> so RunTraceable yields IO<Fin<ChargeResult>> (no double-Fin)
         return flow.RunTraceable(ct);
     }
 }

@@ -7,8 +7,7 @@ namespace SmallShopBigAmbitions.Monads.TraceableTransformer;
 public record TraceableT<A>(
     IO<A> Effect,
     string SpanName,
-    Func<A, IEnumerable<KeyValuePair<string, object>>>? Attributes = null
-)
+    Func<A, IEnumerable<KeyValuePair<string, object>>>? Attributes = null)
 {
     /// <summary>
     /// Main method to run the traceable effect and log the span.
@@ -108,4 +107,14 @@ public static class TraceableTExtensions
         ) =>
         new(effect, spanName);
 
+    public static TraceableT<Fin<B>> BindFin<A, B>(
+        this TraceableT<Fin<A>> src,
+        Func<A, TraceableT<Fin<B>>> onSucc,
+        Func<Error, TraceableT<Fin<B>>>? onFail = null) =>
+        src.Bind(fin => fin.Match(
+            Succ: onSucc,
+            Fail: e => onFail is null
+                ? TraceableTLifts.FromFin(Fin<B>.Fail(e), src.SpanName + ".fail", _ => [])
+                : onFail(e)
+        ));
 }

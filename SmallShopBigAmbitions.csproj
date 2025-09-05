@@ -34,6 +34,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Application\Cart\ResetCart\" />
+    <Folder Include="Application\Cart\RemoveItemFromCart\" />
     <Folder Include="Application\Products\GetAProduct\" />
     <Folder Include="ViewModels\" />
   </ItemGroup>

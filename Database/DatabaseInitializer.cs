@@ -71,7 +71,6 @@ public static class DatabaseInitialize
                 new("Items", "TEXT") // Serialized array of product IDs
             ]
         ),
-        // New: Payment intents storage
         new Table(
             Name: "PaymentIntents",
             Columns:
@@ -93,7 +92,6 @@ public static class DatabaseInitialize
                 new("ReservationId", "TEXT", Nullable: false)
             ]
         ),
-        // New: Idempotency key mapping
         new Table(
             Name: "IdempotencyKeys",
             Columns:
@@ -101,13 +99,21 @@ public static class DatabaseInitialize
                 new("Key", "TEXT", Nullable: false, PrimaryKey: true),
                 new("PaymentIntentId", "TEXT", Nullable: false)
             ]
-        )
+        ),
+        // CartLines created separately below with FK + UNIQUE constraint if not exists (legacy DBs won't be altered)
     ];
 
     public static IO<Fin<Unit>> Initialize(string connectionString) => IO.lift<Fin<Unit>>(() =>
     {
         using var connection = new SqliteConnection(connectionString);
         connection.Open();
+
+        // Enforce foreign keys
+        using (var fk = connection.CreateCommand())
+        {
+            fk.CommandText = "PRAGMA foreign_keys = ON;";
+            fk.ExecuteNonQuery();
+        }
 
         // Create schema declaratively
         foreach (var createSql in Schema.Select(t => t.ToCreateSql()))
@@ -117,13 +123,42 @@ public static class DatabaseInitialize
             cmd.ExecuteNonQuery();
         }
 
-        // Seed data declaratively
+        // Create CartLines table (with FK + WITHOUT ROWID not needed, but UNIQUE index added below)
+        using (var cartLines = connection.CreateCommand())
+        {
+            cartLines.CommandText = @"CREATE TABLE IF NOT EXISTS CartLines (
+                Id INTEGER PRIMARY KEY,
+                CartId TEXT NOT NULL,
+                ProductId TEXT NOT NULL,
+                Quantity INTEGER NOT NULL,
+                UnitPrice REAL NOT NULL,
+                Currency TEXT NOT NULL,
+                FOREIGN KEY (CartId) REFERENCES Carts(Id) ON DELETE CASCADE
+            );";
+            cartLines.ExecuteNonQuery();
+        }
+
+        // Indexes for performance and uniqueness
+        var indexStatements = new[]
+        {
+            "CREATE INDEX IF NOT EXISTS IX_CartLines_CartId ON CartLines (CartId)",
+            "CREATE INDEX IF NOT EXISTS IX_CartLines_ProductId ON CartLines (ProductId)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS UX_CartLines_Cart_Product ON CartLines (CartId, ProductId)"
+        };
+        foreach (var idx in indexStatements)
+        {
+            using var idxCmd = connection.CreateCommand();
+            idxCmd.CommandText = idx;
+            idxCmd.ExecuteNonQuery();
+        }
+
+        // Seed data declaratively (mutable Dictionary is fine; immutable Map not required here)
         InsertIfNotExists(
             connection,
             table: "Customers",
             keyColumn: "Id",
             keyValue: "11111111-1111-1111-1111-111111111111",
-            values: new Dictionary<string, object>
+            values: new Dictionary<string, object?>
             {
                 ["Id"] = "11111111-1111-1111-1111-111111111111",
                 ["Name"] = "Alice",
@@ -137,7 +172,7 @@ public static class DatabaseInitialize
             table: "FakeStoreProducts",
             keyColumn: "Id",
             keyValue: 1,
-            values: new Dictionary<string, object>
+            values: new Dictionary<string, object?>
             {
                 ["Id"] = 1,
                 ["Title"] = "Sample Product",
@@ -153,7 +188,7 @@ public static class DatabaseInitialize
         return Fin<Unit>.Succ(unit);
     });
 
-    // Expose the insert helper so other seeders can reuse the DSL
+    // Insert helper
     public static void InsertIfNotExists(SqliteConnection connection, string table, string keyColumn, object keyValue, IReadOnlyDictionary<string, object?> values)
     {
         var columns = string.Join(", ", values.Keys);

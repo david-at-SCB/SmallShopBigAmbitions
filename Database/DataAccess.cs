@@ -3,7 +3,11 @@ using Microsoft.Data.Sqlite;
 using SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads;
+using SmallShopBigAmbitions.Monads.TraceableTransformer;
 using static LanguageExt.Prelude;
+using System;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace SmallShopBigAmbitions.Database;
 
@@ -12,99 +16,131 @@ public sealed record DbEnv(string ConnectionString);
 
 public interface IDataAccess
 {
-    // Reader-based data access: pass DbEnv at the call site
-    Reader<DbEnv, IO<Fin<Option<PaymentIntent>>>> GetPaymentIntentById(Guid id);
-
-    Reader<DbEnv, IO<Fin<Unit>>> UpdatePaymentIntent(PaymentIntent intent);
-
-    Reader<DbEnv, IO<Fin<PaymentIntent>>> InsertPaymentIntent(PaymentIntent intent);
-
-    Reader<DbEnv, Customer> GetCustomerById(Guid userId);
-
-    Reader<DbEnv, Cart> GetCustomerCart(Guid userId);
+    TraceableT<Fin<Option<PaymentIntent>>> GetPaymentIntentById(Guid id);
+    TraceableT<Fin<Unit>> UpdatePaymentIntent(PaymentIntent intent);
+    TraceableT<Fin<PaymentIntent>> InsertPaymentIntent(PaymentIntent intent);
+    TraceableT<Fin<Customer>> GetCustomerById(Guid userId);
+    TraceableT<Fin<Cart>> GetCustomerCart(Guid userId);
 }
 
-public sealed class DataAccess : IDataAccess
+public sealed class DataAccess(string connectionString) : IDataAccess
 {
-    public Reader<DbEnv, IO<Fin<Option<PaymentIntent>>>> GetPaymentIntentById(Guid id) =>
-        env => IOFin.From(() =>
+    private readonly DbEnv _env = new(connectionString);
+
+    // Central helper: runs a synchronous Fin-producing function inside a TraceableT span with auto error tagging
+    private static TraceableT<Fin<T>> TraceFin<T>(
+        string span,
+        Func<Fin<T>> run,
+        Func<Fin<T>, IEnumerable<KeyValuePair<string, object>>>? attrs = null)
+    {
+        IO<Fin<T>> effect = IO.lift<Fin<T>>(() => run());
+        IEnumerable<KeyValuePair<string, object>> AttrsFn(Fin<T> fin)
         {
-            using var conn = new SqliteConnection(env.ConnectionString);
-            conn.Open();
+            if (attrs != null) return attrs(fin);
+            return fin.Match(
+                Succ: _ => Enumerable.Empty<KeyValuePair<string, object>>(),
+                Fail: e => new[] { new KeyValuePair<string, object>("error", e.Message) }
+            );
+        }
+        return new TraceableT<Fin<T>>(effect, span, AttrsFn);
+    }
 
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT * FROM PaymentIntents WHERE Id=@Id LIMIT 1";
-            cmd.Parameters.AddWithValue("@Id", id.ToString());
-
-            using var reader = cmd.ExecuteReader();
-            return reader.Read()
-                ? Option<PaymentIntent>.Some(ReadIntent(reader))
-                : Option<PaymentIntent>.None;
+    public TraceableT<Fin<Option<PaymentIntent>>> GetPaymentIntentById(Guid id) =>
+        TraceFin("db.payment_intents.get_by_id", () =>
+        {
+            try
+            {
+                using var conn = new SqliteConnection(_env.ConnectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT * FROM PaymentIntents WHERE Id=@Id LIMIT 1";
+                cmd.Parameters.AddWithValue("@Id", id.ToString());
+                using var reader = cmd.ExecuteReader();
+                return FinSucc(reader.Read()
+                    ? Option<PaymentIntent>.Some(ReadIntent(reader))
+                    : Option<PaymentIntent>.None);
+            }
+            catch (Exception ex)
+            {
+                return Fin<Option<PaymentIntent>>.Fail(Error.New(ex));
+            }
         });
 
-    public Reader<DbEnv, IO<Fin<Unit>>> UpdatePaymentIntent(PaymentIntent intent) =>
-        env => IOFin.From(() =>
+    public TraceableT<Fin<Unit>> UpdatePaymentIntent(PaymentIntent intent) =>
+        TraceFin("db.payment_intents.update", () =>
         {
-            using var conn = new SqliteConnection(env.ConnectionString);
-            conn.Open();
-
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"UPDATE PaymentIntents SET
-                Provider=@Provider,
-                ProviderIntentId=@ProviderIntentId,
-                Currency=@Currency,
-                Amount=@Amount,
-                Status=@Status,
-                ClientSecret=@ClientSecret,
-                IdempotencyKey=@IdempotencyKey,
-                Metadata=@Metadata,
-                CreatedAt=@CreatedAt,
-                UpdatedAt=@UpdatedAt,
-                ExpiresAt=@ExpiresAt,
-                ReservationId=@ReservationId
-                WHERE Id=@Id";
-
-            AddParameters(cmd, intent);
-
-            var rows = cmd.ExecuteNonQuery();
-            if (rows == 0) throw new InvalidOperationException($"PaymentIntent {intent.Id} not found");
-            return unit;
+            try
+            {
+                using var conn = new SqliteConnection(_env.ConnectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"UPDATE PaymentIntents SET
+                    Provider=@Provider,
+                    ProviderIntentId=@ProviderIntentId,
+                    Currency=@Currency,
+                    Amount=@Amount,
+                    Status=@Status,
+                    ClientSecret=@ClientSecret,
+                    IdempotencyKey=@IdempotencyKey,
+                    Metadata=@Metadata,
+                    CreatedAt=@CreatedAt,
+                    UpdatedAt=@UpdatedAt,
+                    ExpiresAt=@ExpiresAt,
+                    ReservationId=@ReservationId
+                    WHERE Id=@Id";
+                AddParameters(cmd, intent);
+                var rows = cmd.ExecuteNonQuery();
+                return rows == 0
+                    ? Fin<Unit>.Fail(Error.New($"PaymentIntent {intent.Id} not found"))
+                    : FinSucc(unit);
+            }
+            catch (Exception ex)
+            {
+                return Fin<Unit>.Fail(Error.New(ex));
+            }
         });
 
-    public Reader<DbEnv, IO<Fin<PaymentIntent>>> InsertPaymentIntent(PaymentIntent intent) =>
-        env => IOFin.From(() =>
+    public TraceableT<Fin<PaymentIntent>> InsertPaymentIntent(PaymentIntent intent) =>
+        TraceFin("db.payment_intents.insert", () =>
         {
-            using var conn = new SqliteConnection(env.ConnectionString);
-            conn.Open();
-
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"INSERT INTO PaymentIntents (
-                Id, CartId, UserId, Provider, ProviderIntentId, Currency, Amount, Status,
-                ClientSecret, IdempotencyKey, Metadata, CreatedAt, UpdatedAt, ExpiresAt, ReservationId)
-                VALUES (@Id, @CartId, @UserId, @Provider, @ProviderIntentId, @Currency, @Amount, @Status,
-                        @ClientSecret, @IdempotencyKey, @Metadata, @CreatedAt, @UpdatedAt, @ExpiresAt, @ReservationId);";
-
-            AddParameters(cmd, intent);
-
-            cmd.ExecuteNonQuery();
-            return intent;
+            try
+            {
+                using var conn = new SqliteConnection(_env.ConnectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"INSERT INTO PaymentIntents (
+                    Id, CartId, UserId, Provider, ProviderIntentId, Currency, Amount, Status,
+                    ClientSecret, IdempotencyKey, Metadata, CreatedAt, UpdatedAt, ExpiresAt, ReservationId)
+                    VALUES (@Id, @CartId, @UserId, @Provider, @ProviderIntentId, @Currency, @Amount, @Status,
+                            @ClientSecret, @IdempotencyKey, @Metadata, @CreatedAt, @UpdatedAt, @ExpiresAt, @ReservationId);";
+                AddParameters(cmd, intent);
+                cmd.ExecuteNonQuery();
+                return FinSucc(intent);
+            }
+            catch (Exception ex)
+            {
+                return Fin<PaymentIntent>.Fail(Error.New(ex));
+            }
         });
 
-    public Reader<DbEnv, Customer> GetCustomerById(Guid userId) =>
-        _ => new Customer(userId, "Unknown", "unknown@example.com");
+    public TraceableT<Fin<Customer>> GetCustomerById(Guid userId) =>
+        TraceFin("db.customer.get_by_id", () => FinSucc(new Customer(userId, "Unknown", "unknown@example.com")));
 
-    public Reader<DbEnv, Cart> GetCustomerCart(Guid userId) =>
-        _ => userId == Guid.Empty
-            ? throw new Exception("Cannot create a Cart for non-existent customer")
-            : Cart.Empty(userId);
+    public TraceableT<Fin<Cart>> GetCustomerCart(Guid userId) =>
+        TraceFin("db.cart.get_by_user", () =>
+        {
+            if (userId == Guid.Empty)
+                return Fin<Cart>.Fail(Error.New("Cannot create a Cart for non-existent customer"));
+            return FinSucc(Cart.Empty(userId));
+        });
 
     // ----------------- Helpers -----------------
-
     private static void AddParameters(SqliteCommand cmd, PaymentIntent intent)
     {
-        string? ClientSecretOrNull() => intent.ClientSecret.Match<string?>(s => s, () => null);
-        string? IdempotencyOrNull() => intent.IdempotencyKey.Match<string?>(s => s, () => null);
-        object ExpiresDb() => intent.ExpiresAt.Match<object>(dt => dt.UtcDateTime.ToString("O"), () => DBNull.Value);
+        string? clientSecretOrNull = intent.ClientSecret.Match<string?>(s => s, () => null);
+        string? idempotencyOrNull = intent.IdempotencyKey.Match<string?>(s => s, () => null);
+        object expiresDb = intent.ExpiresAt.Match<object>(dt => dt.UtcDateTime.ToString("O"), () => DBNull.Value);
+        string metadata = SerializeMetadata(intent.Metadata);
 
         cmd.Parameters.AddWithValue("@Id", intent.Id.ToString());
         cmd.Parameters.AddWithValue("@CartId", intent.CartId.ToString());
@@ -114,16 +150,16 @@ public sealed class DataAccess : IDataAccess
         cmd.Parameters.AddWithValue("@Currency", intent.Currency);
         cmd.Parameters.AddWithValue("@Amount", intent.Amount);
         cmd.Parameters.AddWithValue("@Status", (int)intent.Status);
-        cmd.Parameters.AddWithValue("@ClientSecret", (object?)ClientSecretOrNull() ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@IdempotencyKey", (object?)IdempotencyOrNull() ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("@Metadata", SerializeMetadata(intent.Metadata));
+        cmd.Parameters.AddWithValue("@ClientSecret", (object?)clientSecretOrNull ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@IdempotencyKey", (object?)idempotencyOrNull ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@Metadata", metadata);
         cmd.Parameters.AddWithValue("@CreatedAt", intent.CreatedAt.UtcDateTime.ToString("O"));
         cmd.Parameters.AddWithValue("@UpdatedAt", intent.UpdatedAt.UtcDateTime.ToString("O"));
-        cmd.Parameters.AddWithValue("@ExpiresAt", ExpiresDb());
+        cmd.Parameters.AddWithValue("@ExpiresAt", expiresDb);
         cmd.Parameters.AddWithValue("@ReservationId", intent.ReservationId.ToString());
     }
 
-    private static string SerializeMetadata(LanguageExt.Map<string, string> map) =>
+    private static string SerializeMetadata(Map<string, string> map) =>
         string.Join(";", map.AsEnumerable().Select(kv => $"{kv.Key}={kv.Value}"));
 
     private static PaymentIntent ReadIntent(SqliteDataReader reader)

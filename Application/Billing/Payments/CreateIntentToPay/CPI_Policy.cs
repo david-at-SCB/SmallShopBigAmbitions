@@ -31,7 +31,7 @@ public sealed class CreateIntentToPayPolicy
                     {
                         var availableFin = _inventory.EnsureAvailable(cart.Items.Values.ToSeq()).Run();
                         return availableFin.Match(
-                            Succ: _ => Fin<(CartSnapshot, IPaymentProvider)>.Succ((cart, provider)),
+                            Succ: ( discard )=> Fin<(CartSnapshot, IPaymentProvider)>.Succ((cart, provider)),
                             Fail: e => Fin<(CartSnapshot, IPaymentProvider)>.Fail(e)
                         );
                     });

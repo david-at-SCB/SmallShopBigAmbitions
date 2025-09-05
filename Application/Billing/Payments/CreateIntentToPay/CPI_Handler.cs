@@ -68,20 +68,21 @@ public sealed class CreateIntentToPayHandler(
                 Fail: e => TraceableTLifts.FromFin(Fin<FlowState>.Fail(e), "pricing.skip", ErrorAttrs)));
 
         // Side-effects section composed as IO<Fin<FlowState>>
-        IO<Fin<FlowState>> sideEffects(FlowState s2) =>
-            ReserveInventoryStep(s2).RunTraceable(ct)
-                .Bind(s3Fin => s3Fin.Match(
-                    Succ: s => ProviderIntentStep(request, s).RunTraceable(ct),
-                    Fail: e => IO.lift<Fin<FlowState>>(() => Fin<FlowState>.Fail(e))
-                ))
-                .Bind(s4Fin => s4Fin.Match(
-                    Succ: s => PersistIntentStep(request, s).RunTraceable(ct),
-                    Fail: e => IO.lift<Fin<FlowState>>(() => Fin<FlowState>.Fail(e))
-                ))
-                .Bind(s5Fin => s5Fin.Match(
-                    Succ: s => PublishEventStep(s).RunTraceable(ct),
-                    Fail: e => IO.lift<Fin<FlowState>>(() => Fin<FlowState>.Fail(e))
-                ));
+        IO<Fin<FlowState>> sideEffects(FlowState s2)
+        {
+            IO<Fin<FlowState>> Fail(Error e) => IO.lift<Fin<FlowState>>(() => Fin<FlowState>.Fail(e));
+
+            return ReserveInventoryStep(s2).RunTraceable(ct)
+                .Bind(r1 => r1.Match(
+                    Succ: fs1 => ProviderIntentStep(request, fs1).RunTraceable(ct),
+                    Fail: e => Fail(e)))
+                .Bind(r2 => r2.Match(
+                    Succ: fs2 => PersistIntentStep(request, fs2).RunTraceable(ct),
+                    Fail: e => Fail(e)))
+                .Bind(r3 => r3.Match(
+                    Succ: fs3 => PublishEventStep(fs3).RunTraceable(ct),
+                    Fail: e => Fail(e)));
+        }
 
         // Run pre-section, then wrap side-effects with idempotency if a key is provided
         return pre.RunTraceable(ct).Bind(preFin => preFin.Match(
@@ -195,9 +196,10 @@ public sealed class CreateIntentToPayHandler(
             ReservationId: state.ReservationId ?? Guid.Empty
         );
 
-        return TraceableTLifts.FromIOFinRawTracableT(_repo.Insert(intent), ActivityNames.PersistPaymentIntent)
-            .Map(insFin => insFin.Map(_ => state with { Intent = intent }))
-            .WithAttributes(flowState => PersistAttrs(flowState, intent));
+        return _repo.Insert(intent)
+            .Map(fin => fin.Map(_ => state with { Intent = intent }))
+            .WithSpanName(ActivityNames.PersistPaymentIntent)
+            .WithAttributes(flowStateFin => PersistAttrs(flowStateFin, intent));
     }
 
     /// <summary>Publish an integration/domain event for downstream consumers.</summary>

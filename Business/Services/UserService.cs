@@ -18,12 +18,9 @@ public class UserService(IDataAccess DataAccess)
 {
     private readonly IDataAccess _dataAccess = DataAccess;
 
-    public TraceableT<Customer> GetUserById(Guid userId)
-    {
-        return _dataAccess.GetCustomerById(userId);
-    }
-    public TraceableT<Customer> GetUserById(Customer customer)
-    {
-        return _dataAccess.GetCustomerById(customer.Id);
-    }
+    public TraceableT<Fin<Customer>> GetUserById(Guid userId) =>
+        _dataAccess.GetCustomerById(userId);
+
+    public TraceableT<Fin<Customer>> GetUserById(Customer customer) =>
+        _dataAccess.GetCustomerById(customer.Id);
 }
