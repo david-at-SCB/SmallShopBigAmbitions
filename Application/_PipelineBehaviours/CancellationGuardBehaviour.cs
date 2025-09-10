@@ -1,7 +1,7 @@
 using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 
-namespace SmallShopBigAmbitions.FunctionalDispatcher;
+namespace SmallShopBigAmbitions.Application._PipelineBehaviours;
 
 /// <summary>
 /// Early-cancellation pipeline behaviour.  If the token is already cancelled it fails fast without invoking inner behaviours or handler.
