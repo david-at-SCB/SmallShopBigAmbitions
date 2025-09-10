@@ -8,12 +8,9 @@
 // - Pass CancellationToken from handler to service.
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using SmallShopBigAmbitions.Application.Billing.CheckoutUser;
-using SmallShopBigAmbitions.Application.Cart;
-using SmallShopBigAmbitions.Application.Cart.AddItemsAndCheckout;
+using SmallShopBigAmbitions.Application.Cart.AddItemToCart;
 using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
 using SmallShopBigAmbitions.Application.HelloWorld;
-using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Logic_examples;
 using SmallShopBigAmbitions.Models;
@@ -35,7 +32,7 @@ public class IndexModel : PageModel
 
     public Option<Fin<Cart>> Cart { get; private set; }
 
-    public Option<Fin<CheckoutUserResultDTO>> CheckoutResult { get; private set; }
+    public Option<Fin<AddItemToCartDTO>> AddItemResult { get; private set; }
 
     [BindProperty]
     public string? HelloResult { get; set; }
@@ -45,20 +42,15 @@ public class IndexModel : PageModel
 
     [BindProperty]
     public Guid UserId { get; set; }
+
     public async Task OnGetAsync(Guid? userId, CancellationToken ct)
     {
         if (userId.HasValue)
         {
-            var trustedContext = TrustedContextFactory.FromHttpContext(HttpContext);
-
-            var result = await _dispatcher.Dispatch(new GetCartForUserQuery(userId.Value), ct).RunAsync();
+            var result = await _dispatcher.Dispatch<GetCartForUserQuery, Cart>(new GetCartForUserQuery(userId.Value), ct).RunAsync();
             Cart = result.Match(
                 Succ: cart => Option<Fin<Cart>>.Some(cart),
-                Fail: err =>
-                {
-                    var failure = Fin<Cart>.Fail(err);
-                    Cart = Option<Fin<Cart>>.Some(failure);
-                }
+                Fail: err => Option<Fin<Cart>>.Some(Fin<Cart>.Fail(err))
             );
         }
         else
@@ -67,31 +59,35 @@ public class IndexModel : PageModel
         }
     }
 
+    // Demo handler: add a fixed product (id=1) with quantity 1 to the user's cart.
     public async Task<IActionResult> OnPostAddItemsAndCheckoutAsync(CancellationToken ct)
     {
         var callerId = Guid.NewGuid();
         var userId = UserId != Guid.Empty ? UserId : callerId;
 
-        var trustedContext = TrustedContextFactory.FromHttpContext(HttpContext);
+        var qtyFin = Quantity.Create(1);
+        if (qtyFin.IsFail)
+        {
+            var err = qtyFin.Match(Succ: _ => Error.New("unreachable"), Fail: e => e);
+            ModelState.AddModelError(string.Empty, err.Message);
+            AddItemResult = Option<Fin<AddItemToCartDTO>>.Some(Fin<AddItemToCartDTO>.Fail(err));
+            return Page();
+        }
 
-        var items = Cart.Match<Map<FakeStoreProduct, int>>(
-            Some: finCart => finCart.Match(
-                Succ: cart => Map<FakeStoreProduct, int>(),
-                Fail: _ => Map<FakeStoreProduct, int>()
-            ),
-            None: () => Map<FakeStoreProduct, int>()
-        );
+        var qtyVal = qtyFin.Match(Succ: q => q, Fail: _ => default);
 
-        var cmd = new AddItemsToCartCommand(
+        var cmd = new AddItemToCartCommand(
             userId,
-            items
-        );
+            new ExternalProductRef(1),
+            qtyVal,
+            PriceRef: new("SEK", 150), // TODO: realistic price from product service
+            Source: "index.page");
 
-        var result = await _dispatcher.Dispatch(cmd, ct).RunAsync();
+        var result = await _dispatcher.Dispatch<AddItemToCartCommand, AddItemToCartDTO>(cmd, ct).RunAsync();
 
-        CheckoutResult = result.Match(
-            Succ: res => Option<Fin<CheckoutUserResultDTO>>.Some(res),
-            Fail: err => Fin<CheckoutUserResultDTO>.Fail(err)
+        AddItemResult = result.Match(
+            Succ: dto => Option<Fin<AddItemToCartDTO>>.Some(dto),
+            Fail: err => Option<Fin<AddItemToCartDTO>>.Some(Fin<AddItemToCartDTO>.Fail(err))
         );
 
         return Page();
@@ -104,28 +100,23 @@ public class IndexModel : PageModel
         return Page();
     }
 
-
     public async Task<IActionResult> OnPostSayHelloAsync(string name)
     {
-        // We wanna say hello to the world, or a specific name if provided. Lets use the appropriate request!
         var request = new HelloWorldRequest(name ?? "World");
 
-        // Setup the traceable request. This is lazily evaluated, so it won't run until we call RunTraceable.
         var traceableRequest = TraceableTLifts.FromIO<HelloWorldRequest>(
             IO.lift(() => request),
             "HelloWorldRequest"
         );
 
-        // Now we can use the dispatcher to run the request. Here we also trace the request but also the trip through the dispatcher
         var result = await traceableRequest
             .Bind(req => TraceableTLifts.FromIO<Fin<string>>(
-                _dispatcher.Dispatch<string>(req, CancellationToken.None),
+                _dispatcher.Dispatch<HelloWorldRequest, string>(req, CancellationToken.None),
                 "DispatchHelloWorld"
             ))
             .RunTraceable(CancellationToken.None)
             .RunAsync();
 
-        // What did we get back? A Fin<string> with the result of the hello world request, or an Error if something went wrong.
         HelloResult = result.Match(
             Succ: msg => msg,
             Fail: err => $"Error: {err.Message}"
@@ -138,5 +129,4 @@ public class IndexModel : PageModel
     {
         return RedirectToPage("/Products");
     }
-
 }

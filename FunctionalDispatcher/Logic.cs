@@ -1,5 +1,6 @@
 ﻿using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
+using System.Reflection;
 
 namespace SmallShopBigAmbitions.FunctionalDispatcher;
 
@@ -42,61 +43,73 @@ public interface IFunctionalPipelineBehavior<TRequest, TResponse>
 
 public interface IFunctionalDispatcher
 {
+    [Obsolete("Use the strongly-typed generic Dispatch<TRequest, TResponse> method instead.")]
     IO<Fin<TResponse>> Dispatch<TResponse>(IFunctionalRequest<TResponse> request, CancellationToken ct);
-    IO<Fin<TResponse>> BuildPipeline<TResponse>(
-        IFunctionalRequest<TResponse> request,
-        TrustedContext context,
-        object handlerType,
-        object handlerInstance,
-        CancellationToken ct
-        );
-
+    IO<Fin<TResponse>> Dispatch<TRequest, TResponse>(TRequest request, CancellationToken ct)
+        where TRequest : IFunctionalRequest<TResponse>;
 }
 
-/// <summary>
-/// Meadiator-like dispatcher for functional requests.
-/// </summary>
 public class FunctionalDispatcher : IFunctionalDispatcher
 {
     private readonly IServiceProvider _provider;
 
-    public FunctionalDispatcher(IServiceProvider provider)
-    {
-        _provider = provider;
-    }
+    public FunctionalDispatcher(IServiceProvider provider) => _provider = provider;
 
+    // Existing (runtime-type) entry point kept for backwards compatibility
+    [Obsolete("Use the strongly-typed generic Dispatch<TRequest, TResponse> method instead.")]
     public IO<Fin<TResponse>> Dispatch<TResponse>(IFunctionalRequest<TResponse> request, CancellationToken ct)
     {
+        var context = _provider.GetService<TrustedContext>() ?? new TrustedContext(); // should we maybe short-cicuit if no context?
         var requestType = request.GetType();
-        var handlerType = typeof(IFunctionalHandler<,>).MakeGenericType(requestType, typeof(TResponse));
-        var handler = _provider.GetService(handlerType);
+
+        // Use reflection to call the strongly typed generic overload
+        var method = typeof(FunctionalDispatcher)
+            .GetMethod(nameof(Dispatch), BindingFlags.Public | BindingFlags.Instance, new[] { requestType, typeof(CancellationToken) });
+
+        if (method is null || !method.IsGenericMethodDefinition)
+            return IO.lift<Fin<TResponse>>(() => Fin<TResponse>.Fail(Error.New("Dispatch method resolution failure")));
+
+        var generic = method.MakeGenericMethod(requestType, typeof(TResponse));
+        return (IO<Fin<TResponse>>)generic.Invoke(this, new object[] { request, ct })!;
+    }
+
+    // Preferred strongly-typed generic API
+    public IO<Fin<TResponse>> Dispatch<TRequest, TResponse>(TRequest request, CancellationToken ct)
+        where TRequest : IFunctionalRequest<TResponse>
+    {
+        var context = _provider.GetService<TrustedContext>() ?? new TrustedContext();
+        var handler = _provider.GetService<IFunctionalHandler<TRequest, TResponse>>();
 
         if (handler is null)
-            return IO.lift<Fin<TResponse>>(() => Fin<TResponse>.Fail(Error.New($"No handler found for {requestType.Name}")));
+            return IO.lift<Fin<TResponse>>(() => Fin<TResponse>.Fail(Error.New($"No handler found for {typeof(TRequest).Name}")));
 
-        var context = _provider.GetService<TrustedContext>() ?? new TrustedContext(); // fallback if not registered
-        var pipeline = BuildPipeline(request, context, handler, handlerType, ct);
-        return pipeline;
+        return BuildPipeline<TRequest, TResponse>(request, context, handler, ct);
     }
 
-    public IO<Fin<TResponse>> BuildPipeline<TResponse>(
-        IFunctionalRequest<TResponse> request, TrustedContext context, object handlerType, object handlerInstance, CancellationToken ct)
+    private IO<Fin<TResponse>> BuildPipeline<TRequest, TResponse>(
+        TRequest request,
+        TrustedContext context,
+        IFunctionalHandler<TRequest, TResponse> handler,
+        CancellationToken ct
+    ) where TRequest : IFunctionalRequest<TResponse>
     {
-        var requestType = request.GetType();
-        var behaviorType = typeof(IFunctionalPipelineBehavior<,>).MakeGenericType(requestType, typeof(TResponse));
-        var behaviors = _provider.GetServices(behaviorType).Cast<dynamic>().ToList();
+        var behaviors = _provider
+            .GetServices<IFunctionalPipelineBehavior<TRequest, TResponse>>()
+            .ToList();
 
-        Func<dynamic, TrustedContext, CancellationToken, IO<Fin<TResponse>>> finalHandler = (req, ctx, token) =>
-            ((dynamic)handlerInstance).Handle((dynamic)req, ctx, token);
+        Func<TRequest, TrustedContext, CancellationToken, IO<Fin<TResponse>>> next =
+            (req, ctx, token) => handler.Handle(req, ctx, token);
 
+        // Wrap in reverse so first registered runs outermost (same semantics as original)
         foreach (var behavior in behaviors.AsEnumerable().Reverse())
         {
-            var next = finalHandler;
-            finalHandler = (req, ctx, token) => behavior.Handle((dynamic)req, ctx, token, next);
+            var inner = next;
+            next = (req, ctx, token) => behavior.Handle(req, ctx, inner, token);
         }
 
-        return finalHandler((dynamic)request, context, ct);
+        return next(request, context, ct);
     }
+
     public static TraceableT<Fin<TResponse>> DispatchWithTracing<TRequest, TResponse>(
         IFunctionalDispatcher dispatcher,
         TRequest request,
@@ -104,8 +117,7 @@ public class FunctionalDispatcher : IFunctionalDispatcher
         CancellationToken ct
     ) where TRequest : IFunctionalRequest<TResponse>
     {
-        var dispatchIO = dispatcher.Dispatch<TResponse>(request, ct);
+        var dispatchIO = dispatcher.Dispatch<TRequest, TResponse>(request, ct);
         return TraceableTLifts.FromIO<Fin<TResponse>>(dispatchIO, spanName);
     }
-
 }

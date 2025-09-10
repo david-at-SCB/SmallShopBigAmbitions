@@ -129,10 +129,65 @@ public sealed class DataAccess(string connectionString) : IDataAccess
     public TraceableT<Fin<Cart>> GetCustomerCart(Guid userId) =>
         TraceFin("db.cart.get_by_user", () =>
         {
-            if (userId == Guid.Empty)
-                return Fin<Cart>.Fail(Error.New("Cannot create a Cart for non-existent customer"));
-            return FinSucc(Cart.Empty(userId));
-        });
+            try
+            {
+                if (userId == Guid.Empty)
+                    return Fin<Cart>.Fail(Error.New("Cannot create a Cart for non-existent customer"));
+
+                using var conn = new SqliteConnection(_env.ConnectionString);
+                conn.Open();
+                // Ensure cart row exists
+                using (var ensure = conn.CreateCommand())
+                {
+                    ensure.CommandText = "INSERT INTO Carts (Id, UserId) SELECT @Id,@U WHERE NOT EXISTS (SELECT 1 FROM Carts WHERE UserId=@U) RETURNING Id";
+                    ensure.Parameters.AddWithValue("@Id", Guid.NewGuid().ToString());
+                    ensure.Parameters.AddWithValue("@U", userId.ToString());
+                    // Some SQLite versions don't support RETURNING; ignore result.
+                    try { ensure.ExecuteNonQuery(); } catch { }
+                }
+
+                // Fetch existing cart id
+                Guid cartId;
+                using (var sel = conn.CreateCommand())
+                {
+                    sel.CommandText = "SELECT Id FROM Carts WHERE UserId=@U LIMIT 1";
+                    sel.Parameters.AddWithValue("@U", userId.ToString());
+                    var cid = sel.ExecuteScalar()?.ToString();
+                    cartId = cid != null ? Guid.Parse(cid) : Guid.NewGuid();
+                }
+
+                // Load lines
+                var items = new LanguageExt.HashMap<ProductId, CartLine>();
+                using (var lines = conn.CreateCommand())
+                {
+                    lines.CommandText = "SELECT ProductId, Quantity, UnitPrice, Currency FROM CartLines WHERE CartId=@C";
+                    lines.Parameters.AddWithValue("@C", cartId.ToString());
+                    using var rdr = lines.ExecuteReader();
+                    while (rdr.Read())
+                    {
+                        var pid = new ProductId(Guid.Parse(rdr.GetString(0)));
+                        var qty = rdr.GetInt32(1);
+                        var unitPrice = rdr.GetDecimal(2);
+                        var currency = rdr.GetString(3);
+                        items = items.Add(pid, new CartLine(pid, qty, new Money(currency, unitPrice)));
+                    }
+                }
+
+                var cartItems = new CartItems(items);
+                return FinSucc(new Cart(cartId, userId, cartItems));
+            }
+            catch (Exception ex)
+            {
+                return Fin<Cart>.Fail(Error.New(ex));
+            }
+        }, fin => fin.Match(
+            Succ: c => new[]
+            {
+                new KeyValuePair<string, object>("user.id", userId),
+                new KeyValuePair<string, object>("cart.item.count", c.Items.Count)
+            },
+            Fail: e => new[] { new KeyValuePair<string, object>("error", e.Message) }
+        ));
 
     // ----------------- Helpers -----------------
     private static void AddParameters(SqliteCommand cmd, PaymentIntent intent)

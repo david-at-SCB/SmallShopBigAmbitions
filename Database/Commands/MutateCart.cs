@@ -36,7 +36,7 @@ public interface ICartPersistence
     IO<Fin<CartSnapshot>> Clear(Guid cartId, Guid userId);
 }
 
-public sealed class SqliteCartPersistence(DatabaseConfig cfg, ILogger<SqliteCartPersistence> logger) : ICartPersistence
+public sealed class CartPersistenceImplementation(DatabaseConfig cfg, ILogger<CartPersistenceImplementation> logger) : ICartPersistence
 {
     private readonly string _cs = cfg.ConnectionString;
     private readonly ILogger _logger = logger;

@@ -65,15 +65,17 @@ public static class TraceableTLifts
         Func<A, HashMap<string, object>> attributes) =>
         new(effect, spanName, a => attributes(a));
 
-   
+   /// <summary>
+   /// Overload: Create a new TraceableT without attributes
+   /// </summary>
     public static TraceableT<T> FromIO<T>(IO<T> io, string spanName) =>
         new(io, spanName);
 
-    public static TraceableT<Fin<T>> FromIOFinRawTracableT<T>(IO<Fin<T>> io, string spanName) =>
+    public static TraceableT<Fin<T>> FromIOFin<T>(IO<Fin<T>> io, string spanName) =>
         new(io, spanName);
 
     // Explicit names to avoid overload confusion, suffixed with TracableT
-    public static TraceableT<A> FromIOFinThrowingTracableT<A>(
+    public static TraceableT<A> FromIOFinThrowing<A>(
         IO<Fin<A>> effect,
         string spanName,
         Func<A, IEnumerable<KeyValuePair<string, object>>>? attributes = null) =>
@@ -100,14 +102,4 @@ public static class TraceableTLifts
                 return Fin<A>.Fail(Error.New(ex));
             }
         });
-
-    public static IO<Fin<A>> ToFinFromInnerSuccess<A>(this TraceableT<A> traceable, CancellationToken ct, Func<A, Fin<bool>> successSelector)
-    {
-        return traceable.RunTraceable(ct).Map(result =>
-            successSelector(result).Match(
-                Succ: _ => Fin<A>.Succ(result),
-                Fail: err => Fin<A>.Fail(err)
-            )
-        );
-    }
 }

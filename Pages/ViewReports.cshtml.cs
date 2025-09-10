@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
 using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.FunctionalDispatcher;
+using SmallShopBigAmbitions.Models;
 
 namespace SmallShopBigAmbitions.Pages
 {
@@ -25,7 +26,7 @@ namespace SmallShopBigAmbitions.Pages
         public async Task OnGetAsync(Guid userId, CancellationToken ct)
         {
             var trustedContext = TrustedContextFactory.FromHttpContext(HttpContext);
-            var cart = await _dispatcher.Dispatch(new GetCartForUserQuery(userId), ct).RunAsync();
+            var cart = await _dispatcher.Dispatch<GetCartForUserQuery, Cart>(new GetCartForUserQuery(userId), ct).RunAsync();
         }
     }
 }

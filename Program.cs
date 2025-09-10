@@ -232,6 +232,7 @@ builder.Services.AddScoped<IPaymentProviderSelector, PaymentProviderSelector>();
 builder.Services.AddScoped<IPaymentRefundService, PaymentRefundService>();
 builder.Services.AddScoped<ICreditService, CreditService>();
 builder.Services.AddScoped<IPaymentCaptureService, PaymentCaptureService>();
+builder.Services.AddScoped<ICartPersistence, CartPersistenceImplementation>();
 builder.Services.AddScoped<ICartQueries, InMemoryCartQueries>();
 builder.Services.AddScoped<IOrderRepository, InMemoryOrderRepository>();
 builder.Services.AddScoped<IPricingService, BasicPricingService>();

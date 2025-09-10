@@ -18,7 +18,6 @@ public interface ICartService
 {
     TraceableT<Fin<Cart>> GetCartForUser(Guid userId);
     TraceableT<Fin<Cart>> AddItems(Cart cart, HashMap<ProductId, CartLine> items);
-    // Legacy convenience (avoid in new code)
     Cart GetCartByUserId(Guid userId);
 }
 
@@ -35,24 +34,24 @@ public class CartService(ILogger<CartService> logger, IDataAccess dataAccess) : 
                 {
                     new KeyValuePair<string, object>("cart.id", c.Id),
                     new KeyValuePair<string, object>("user.id", c.CustomerId),
-                    new KeyValuePair<string, object>("cart.item.count", c.Lines.Count)
+                    new KeyValuePair<string, object>("cart.item.count", c.Items.Count)
                 },
                 Fail: e => new[] { new KeyValuePair<string, object>("error", e.Message) }
             ))
             .WithLogging(_logger);
 
     public TraceableT<Fin<Cart>> AddItems(Cart cart, HashMap<ProductId, CartLine> items) =>
-        TraceableTLifts.FromIOFinRawTracableT(
+        TraceableTLifts.FromIOFin(
                 IO.lift<Fin<Cart>>(() =>
                 {
                     try
                     {
-                        var merged = items.Fold(cart.Lines, (acc, kv) =>
+                        var merged = items.Fold(cart.Items.Lines, (acc, kv) =>
                         {
                             var existingQty = acc.Find(kv.ProductId).Match(l => l.Quantity, () => 0);
                             return acc.Add(kv.ProductId, kv with { Quantity = existingQty + kv.Quantity });
                         });
-                        return Fin<Cart>.Succ(cart with { Lines = merged });
+                        return Fin<Cart>.Succ(cart with { Items = new CartItems(merged) });
                     }
                     catch (Exception ex)
                     {
@@ -65,7 +64,7 @@ public class CartService(ILogger<CartService> logger, IDataAccess dataAccess) : 
                 {
                     new KeyValuePair<string, object>("cart.id", c.Id),
                     new KeyValuePair<string, object>("customer.id", c.CustomerId),
-                    new KeyValuePair<string, object>("cart.item.count", c.Lines.Count)
+                    new KeyValuePair<string, object>("cart.item.count", c.Items.Count)
                 },
                 Fail: e => new[] { new KeyValuePair<string, object>("error", e.Message) }
             ))

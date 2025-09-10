@@ -2,12 +2,22 @@
 
 using SmallShopBigAmbitions.Models;
 using LanguageExt;
+using LanguageExt.Common;
 using SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent;
 using static LanguageExt.Prelude;
 using SmallShopBigAmbitions.Monads.LanguageExtExtensions; // optional: LINQ helpers for IO<Fin<>
 using SmallShopBigAmbitions.Application._Abstractions;
+using SmallShopBigAmbitions.Application._Policy;
 
-// Policy can read/query, but must not write/commit side effects.
+public static class CreateIntentToPayValidator
+{
+    public static Validation<Seq<Error>, Unit> Validate(IntentToPayCommand cmd, CartSnapshot cart) =>
+        RuleCombiner.Apply(
+            Rule.From("method", () => cmd.Method != default, ErrorCodes.Payment_Intent_MethodRequired),
+            Rule.From("cart_non_empty", () => !cart.Items.IsEmpty, ErrorCodes.Payment_Intent_CartEmpty)
+        );
+}
+
 public sealed class CreateIntentToPayPolicy
 {
     private readonly ICartQueries _carts;
@@ -23,24 +33,18 @@ public sealed class CreateIntentToPayPolicy
             var cartFin = _carts.GetCart(cmd.CartId).Run();
             return cartFin.Bind(cart =>
             {
-                var nonEmptyFin = EnsureCartNotEmpty(cart).Run();
-                return nonEmptyFin.Bind(_ =>
+                var validationFin = CreateIntentToPayValidator.Validate(cmd, cart).ToFin();
+                return validationFin.Bind(_ =>
                 {
                     var providerFin = _providers.Resolve(cmd.Method);
-                    return providerFin.Bind((IPaymentProvider provider) =>
+                    return providerFin.Bind((IPaymentProvider provider) => // CS9236
                     {
                         var availableFin = _inventory.EnsureAvailable(cart.Items.Values.ToSeq()).Run();
                         return availableFin.Match(
-                            Succ: ( discard )=> Fin<(CartSnapshot, IPaymentProvider)>.Succ((cart, provider)),
-                            Fail: e => Fin<(CartSnapshot, IPaymentProvider)>.Fail(e)
-                        );
+                            Succ: _ => Fin<(CartSnapshot, IPaymentProvider)>.Succ((cart, provider)), // CS9236
+                            Fail: e => Fin<(CartSnapshot, IPaymentProvider)>.Fail(e)); // CS9236
                     });
                 });
             });
         });
-
-    private static IO<Fin<Unit>> EnsureCartNotEmpty(CartSnapshot cart) =>
-        cart.Items.IsEmpty
-            ? IO.lift<Fin<Unit>>(() => Fin<Unit>.Fail(PaymentErrors.CartEmpty))
-            : IO.lift<Fin<Unit>>(() => Fin<Unit>.Succ(unit));
 }

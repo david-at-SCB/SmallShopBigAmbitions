@@ -112,27 +112,27 @@ public sealed class CreateIntentToPayHandler(
 
     /// <summary>Require authenticated caller; adds a span and returns Fin<Unit>.</summary>
     private static TraceableT<Fin<Unit>> RequireTrustedT(TrustedContext context) =>
-        TraceableTLifts.FromIOFinRawTracableT(
+        TraceableTLifts.FromIOFin(
             AuthorizationGuards.RequireTrustedFin(context),
             spanName: "auth.require_trusted");
 
     /// <summary>Validate cart snapshot, provider resolution, and inventory availability.</summary>
     private TraceableT<Fin<FlowState>> PolicyCheckStep(IntentToPayCommand request) =>
         TraceableTLifts
-            .FromIOFinRawTracableT(_policy.Check(request), ActivityNames.PaymentCreateIntent)
+            .FromIOFin(_policy.Check(request), ActivityNames.PaymentCreateIntent)
             .WithAttributes(fin => MakePolicyAttrs(fin, request))
             .Map(checkFin => checkFin.Map(chk => new FlowState(chk.Cart, chk.Provider)));
 
     /// <summary>Compute totals: shipping + discounts + tax. Adds pricing spans and tags totals on success.</summary>
     private TraceableT<Fin<FlowState>> TotalsStep(FlowState state) =>
         TraceableTLifts
-            .FromIOFinRawTracableT(_pricing.CalculateShipping(state.Cart), ActivityNames.PricingCalculate + ".shipping")
+            .FromIOFin(_pricing.CalculateShipping(state.Cart), ActivityNames.PricingCalculate + ".shipping")
             .Bind(shipFin => shipFin.Match(
                 Succ: (Money shipping) => TraceableTLifts
-                    .FromIOFinRawTracableT(_pricing.CalculateDiscounts(state.Cart), ActivityNames.PricingCalculate + ".discounts")
+                    .FromIOFin(_pricing.CalculateDiscounts(state.Cart), ActivityNames.PricingCalculate + ".discounts")
                     .Bind(disFin => disFin.Match(
                         Succ: (Money discounts) =>
-                            TraceableTLifts.FromIOFinRawTracableT(
+                            TraceableTLifts.FromIOFin(
                                 _pricing.CalculateTaxes(state.Cart, new Money(state.Cart.Subtotal.Currency, state.Cart.Subtotal.Amount + shipping.Amount - discounts.Amount)),
                                 ActivityNames.PricingCalculate + ".tax"
                             )
@@ -149,7 +149,7 @@ public sealed class CreateIntentToPayHandler(
     {
         var reservationId = Guid.NewGuid();
         var ttl = TimeSpan.FromMinutes(15);
-        return TraceableTLifts.FromIOFinRawTracableT(_inventory.Reserve(state.Cart, reservationId, ttl), ActivityNames.InventoryReserve)
+        return TraceableTLifts.FromIOFin(_inventory.Reserve(state.Cart, reservationId, ttl), ActivityNames.InventoryReserve)
             .WithAttributes(fin => ReserveAttrs(fin, reservationId))
             .Map(resFin => resFin.Map(_ => state with { ReservationId = reservationId, Ttl = ttl }));
     }
@@ -157,7 +157,7 @@ public sealed class CreateIntentToPayHandler(
     /// <summary>Create provider-specific intent (e.g., Stripe). Maps failures to ProviderFailed.</summary>
     private static TraceableT<Fin<FlowState>> ProviderIntentStep(IntentToPayCommand request, FlowState state) =>
         TraceableTLifts
-            .FromIOFinRawTracableT(
+            .FromIOFin(
                 state.Total is null
                     ? IO.lift<Fin<ProviderIntent>>(() => Fin<ProviderIntent>.Fail(PaymentErrors.PricingFailed))
                     : state.Provider.CreateIntent(new ProviderIntentRequest(
@@ -205,7 +205,7 @@ public sealed class CreateIntentToPayHandler(
     /// <summary>Publish an integration/domain event for downstream consumers.</summary>
     private TraceableT<Fin<FlowState>> PublishEventStep(FlowState state) =>
         TraceableTLifts
-            .FromIOFinRawTracableT(
+            .FromIOFin(
                 _events.Publish(new PaymentIntentCreatedEvent(
                     state.Intent!.Id,
                     state.Intent.CartId,

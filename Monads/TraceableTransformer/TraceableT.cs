@@ -1,6 +1,4 @@
-﻿using SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent;
-using SmallShopBigAmbitions.Monads.Traceable;
-using SmallShopBigAmbitions.TracingSources;
+﻿using SmallShopBigAmbitions.TracingSources;
 
 namespace SmallShopBigAmbitions.Monads.TraceableTransformer;
 
@@ -84,8 +82,6 @@ public record TraceableT<A>(
             SpanName: SpanName + ".Bind",
             Attributes: b => [] // modern syntax
         );
-
-   
 }
 
 public static class TraceableTExtensions

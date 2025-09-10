@@ -24,7 +24,7 @@ public class CheckoutController : ControllerBase
         var trustedContext = TrustedContextFactory.FromHttpContext(HttpContext);
 
         var command = new CheckoutUserCommand(request.UserId);
-        var result = await _dispatcher.Dispatch(command, ct).RunAsync();
+        var result = await _dispatcher.Dispatch<CheckoutUserCommand, CheckoutUserResultDTO>(command, ct).RunAsync();
 
         return result.Match<IActionResult>(
             Succ: result => Ok(new

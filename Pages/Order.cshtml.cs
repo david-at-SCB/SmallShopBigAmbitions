@@ -46,7 +46,7 @@ public class OrderModel : PageModel
     {
         var trustedContext = TrustedContextFactory.FromHttpContext(HttpContext);
 
-        Cart = await _dispatcher.Dispatch(new GetCartForUserQuery(userId), ct).RunAsync();
+        Cart = await _dispatcher.Dispatch<GetCartForUserQuery, Cart>(new GetCartForUserQuery(userId), ct).RunAsync();
 
         var prodFin = _ProductService.GetProductById(productId, ct, maxRetries: 5).RunTraceable(ct).Run();
 

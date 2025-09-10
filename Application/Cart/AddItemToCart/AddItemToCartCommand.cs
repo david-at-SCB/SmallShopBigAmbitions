@@ -3,8 +3,10 @@ using SmallShopBigAmbitions.Models;
 
 namespace SmallShopBigAmbitions.Application.Cart.AddItemToCart;
 
-public record AddItemToCartCommand(Guid UserId, int APIProductId, int Quantity, DateTime AddedAt, Money PriceSnapshot, string Source)
-    : IFunctionalRequest<AddItemToCartDTO>
-{
-
-}
+public record AddItemToCartCommand(
+    Guid UserId,
+    ExternalProductRef Product,
+    Quantity Quantity,
+    Money PriceRef,
+    string Source)
+    : IFunctionalRequest<AddItemToCartDTO>;

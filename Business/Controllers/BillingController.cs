@@ -6,6 +6,7 @@ using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
 using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.FunctionalDispatcher;
+using SmallShopBigAmbitions.Models;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -30,7 +31,7 @@ public class BillingController(IFunctionalDispatcher dispatcher, ICartService ca
         // need to manage a Cart for starters:
         var cart = _cartService.GetCartByUserId(request.CustomerId);
         var command = new ChargeCustomerCommand(request.CustomerId, request.CartId, cart);
-        var result = await _dispatcher.Dispatch(command, ct).RunAsync();
+        var result = await _dispatcher.Dispatch<ChargeCustomerCommand, ChargeResult>(command, ct).RunAsync();
 
         return result.Match<IActionResult>(
             Succ: r => Ok(r),
@@ -50,7 +51,7 @@ public class BillingController(IFunctionalDispatcher dispatcher, ICartService ca
             : payload;
 
         var query = CreateIntentToPayCommand(effectivePayload);
-        var result = await _dispatcher.Dispatch(query, ct).RunAsync();
+        var result = await _dispatcher.Dispatch<IntentToPayCommand, IntentToPayDto>(query, ct).RunAsync();
         return result.Match<IActionResult>(
             Succ: intent => Ok(intent),
             Fail: err => BadRequest(new { error = err.Message })

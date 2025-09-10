@@ -23,7 +23,8 @@ public class CartController : ControllerBase
         var trustedContext = TrustedContextFactory.FromHttpContext(HttpContext);
 
         var ct = HttpContext.RequestAborted;
-        Fin<Cart> result = await _dispatcher.Dispatch(new GetCartForUserQuery(userId), ct).RunAsync();
+        var query = new GetCartForUserQuery(userId);
+        Fin<Cart> result = await _dispatcher.Dispatch<GetCartForUserQuery, Cart>(query, ct).RunAsync();
 
         return result.Match<IActionResult>(
             Succ: cart => Ok(cart),

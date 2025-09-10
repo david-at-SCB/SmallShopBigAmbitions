@@ -31,7 +31,7 @@ public sealed class CapturePaymentHandler(
     public IO<Fin<Unit>> Handle(CapturePaymentCommand request, TrustedContext context, CancellationToken ct)
     {
         var flow = TraceableTLifts
-            .FromIOFinRawTracableT(_capture.Capture(request.PaymentIntentId), "payment.capture")
+            .FromIOFin(_capture.Capture(request.PaymentIntentId), "payment.capture")
             .WithLogging(_logger);
 
         return flow.RunTraceable(ct);

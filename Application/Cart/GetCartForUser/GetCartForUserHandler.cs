@@ -20,7 +20,7 @@ public class GetCartForUserHandler : IFunctionalHandler<GetCartForUserQuery, Mod
     public IO<Fin<Models.Cart>> Handle(GetCartForUserQuery request, TrustedContext context, CancellationToken ct)
     {
         var tracedCart =
-            from auth in TraceableTLifts.FromIOFinRawTracableT(AuthorizationGuards.RequireTrustedFin(context), "auth.ensure_trusted")
+            from auth in TraceableTLifts.FromIOFin(AuthorizationGuards.RequireTrustedFin(context), "auth.ensure_trusted")
             from cartFin in _cartService.GetCartForUser(request.UserId)
                 .WithSpanName("cart.fetch_user")
                 .WithLogging(_logger)

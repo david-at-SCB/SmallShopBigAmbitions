@@ -23,16 +23,16 @@
 
 <form method="post" asp-page-handler="AddItemsAndCheckout">
     <input type="hidden" name="UserId" value="@Guid.NewGuid()" />
-    <button type="submit" class="btn btn-primary">Add 3 items and checkout</button>
+    <button type="submit" class="btn btn-primary">Add demo item to cart</button>
 </form>
 
-@if (Model.CheckoutResult.IsSome)
+@if (Model.AddItemResult.IsSome)
 {
-    var res = Model.CheckoutResult.Match(
+    var res = Model.AddItemResult.Match(
         Some: r => r,
         None: () => default!);
     <div class="alert alert-info mt-3">
-        Checkout: @(res.Match(Succ: _ => "Success", Fail: e => $"Failed: {e.Message}"))
+        Add Item: @(res.Match(Succ: _ => "Success", Fail: e => $"Failed: {e.Message}"))
     </div>
 }
 

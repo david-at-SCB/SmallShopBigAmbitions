@@ -98,25 +98,25 @@ public sealed class CreateOrderHandler(
     {
         var flow =
             // 1) Fetch cart snapshot (unwrapped)
-            from cart in TraceableTLifts.FromIOFinThrowingTracableT(
+            from cart in TraceableTLifts.FromIOFinThrowing(
                 _carts.GetCart(request.CartId),
                 "order.cart.fetch",
                 c => [KVP("cart.id", c.CartId), KVP("user.id", c.UserId)])
 
                 // 2) Pricing (unwrapped monies)
-            from shipping in TraceableTLifts.FromIOFinThrowingTracableT(
+            from shipping in TraceableTLifts.FromIOFinThrowing(
                 _pricing.CalculateShipping(cart),
                 "order.pricing.shipping",
                 m => [KVP("shipping", m.Amount), KVP("currency", m.Currency)])
 
-            from discounts in TraceableTLifts.FromIOFinThrowingTracableT(
+            from discounts in TraceableTLifts.FromIOFinThrowing(
                 _pricing.CalculateDiscounts(cart),
                 "order.pricing.discounts",
                 m => [KVP("discount", m.Amount), KVP("currency", m.Currency)])
 
             let taxableBase = cart.Subtotal.Plus(shipping).Minus(discounts)
 
-            from tax in TraceableTLifts.FromIOFinThrowingTracableT(
+            from tax in TraceableTLifts.FromIOFinThrowing(
                     _pricing.CalculateTaxes(cart, taxableBase),
                     "order.pricing.tax",
                     m => [KVP("tax", m.Amount), KVP("currency", m.Currency)])
@@ -130,7 +130,7 @@ public sealed class CreateOrderHandler(
                       : request.IdempotencyKey!
             let ttl = TimeSpan.FromMinutes(30)
 
-            from lookup in TraceableTLifts.FromIOFinThrowingTracableT(
+            from lookup in TraceableTLifts.FromIOFinThrowing(
                 _idem.TryAcquire(OrderIdem.Scope, key, fingerprint, ttl, ct),
                 "order.idem.try_acquire",
                 l => [KVP("idem.state", l.State.ToString()), KVP("key", key)])
@@ -159,12 +159,12 @@ public sealed class CreateOrderHandler(
         return lookup.State switch
         {
             IdempotencyState.Acquired =>
-                from order in TraceableTLifts.FromIOFinThrowingTracableT(
+                from order in TraceableTLifts.FromIOFinThrowing(
                     _orders.Insert(CreateOrderSnapshot(cart, shipping, discounts, tax, total, fingerprint)),
                     "order.persist",
                     o => new[] { new KeyValuePair<string, object>("order.id", o.OrderId) })
 
-                from _ in TraceableTLifts.FromIOFinThrowingTracableT(
+                from _ in TraceableTLifts.FromIOFinThrowing(
                     _idem.Complete(
                         OrderIdem.Scope,
                         key,

@@ -31,12 +31,20 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
     <PackageReference Include="Serilog.Sinks.OpenTelemetry" Version="4.2.0" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.1" />
+    <!-- Roslyn packages needed for in-project source generator & analyzer -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.10.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Application\Cart\ResetCart\" />
     <Folder Include="Application\Products\GetAProduct\" />
+    <Folder Include="UnitTests\Generator\" />
     <Folder Include="ViewModels\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Analyzer Include="FunctionalDispatcher\Analyzer\CancellationTokenAnalyzer.cs" />
   </ItemGroup>
 
 </Project>

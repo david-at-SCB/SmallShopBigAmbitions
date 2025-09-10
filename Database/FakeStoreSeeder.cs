@@ -17,7 +17,7 @@ public class FakeStoreSeeder(ProductService _productService)
     public TraceableT<Unit> Seed(string connectionString, CancellationToken ct = default)
     {
         // Step 1: fetch all products (throw on Fail to keep the pipeline simple)
-        var fetch = TraceableTLifts.FromIOFinThrowingTracableT(
+        var fetch = TraceableTLifts.FromIOFinThrowing(
             _productService.GetAllProducts(ct: ct).RunTraceable(ct),
             spanName: "FetchFakeStoreProducts"
         );
