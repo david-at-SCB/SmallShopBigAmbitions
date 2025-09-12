@@ -2,7 +2,6 @@ global using LanguageExt;
 global using LanguageExt.Common;
 global using LanguageExt.Pipes;
 global using static LanguageExt.Prelude;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
@@ -18,12 +17,13 @@ using SmallShopBigAmbitions.Application.Billing.Payments.CreateIntentToPay; // I
 using SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent;
 using SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent.Repo;
 using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
+using SmallShopBigAmbitions.Application.Carts.AddItemToCart;
+using SmallShopBigAmbitions.Application.Carts.GetCartForUser; // added for dummy users
 using SmallShopBigAmbitions.Application.HelloWorld;
 using SmallShopBigAmbitions.Application.Orders;
 using SmallShopBigAmbitions.Auth;
-using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.Database;
-using SmallShopBigAmbitions.Database.Idempotency;
+using SmallShopBigAmbitions.Database.Commands;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.FunctionalDispatcher.DI;
 using SmallShopBigAmbitions.HTTP;
@@ -34,9 +34,23 @@ using SmallShopBigAmbitions.TracingSources;
 using System.Diagnostics;
 using System.Security.Claims;
 using System.Text;
-using SmallShopBigAmbitions.Database.Commands;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Register dummy user store
+builder.Services.AddSingleton<IDummyUserStore, InMemoryDummyUserStore>();
+
+// Base authentication (cookie for dummy / impersonation)
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultScheme = "DummyAuth";
+    options.DefaultChallengeScheme = "DummyAuth";
+})
+.AddCookie("DummyAuth", opts =>
+{
+    opts.LoginPath = "/Auth/Impersonate";
+    opts.AccessDeniedPath = "/Auth/Impersonate";
+});
 
 var serviceName = "SmallShopBigAmbitions.Webshop";
 builder.Services.AddSingleton(new ActivitySource("SmallShopBigAmbitions"));
@@ -67,7 +81,7 @@ var dbConnectionString = NormalizeSqlite(rawCs, builder.Environment.ContentRootP
 // Make available if needed elsewhere
 builder.Services.AddSingleton(new DatabaseConfig { ConnectionString = dbConnectionString });
 
-// ----- Serilog
+////// ++++++ Serilog
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .Enrich.FromLogContext()
@@ -97,17 +111,16 @@ builder.Services.AddOpenTelemetry()
             Telemetry.CartSource.Name,
             Telemetry.MediatorSource.Name,
             Telemetry.OrderSource.Name)
-        .AddConsoleExporter()
         .AddOtlpExporter(o => o.Endpoint = new Uri("http://localhost:4317")))
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation()
         .AddProcessInstrumentation()
         .AddRuntimeInstrumentation()
-        .AddConsoleExporter()
         .AddMeter("System.Net Http")
         .AddMeter("System.Net.NameResolution")
         .AddOtlpExporter(o => o.Endpoint = new Uri("http://localhost:4317")));
+////// ------ OPEN TELEMETRY
 
 // ----- Services
 builder.Services.AddHttpContextAccessor();
@@ -119,13 +132,6 @@ builder.Services.AddHttpClient<FunctionalHttpClient>(c =>
 builder.Services.AddSingleton<IEventPublisher, NoopEventPublisher>();
 
 builder.Services.AddTransient<TraceableIOLoggerExample>();
-builder.Services.AddScoped<BillingService>();
-builder.Services.AddScoped<CartService>();
-builder.Services.AddScoped<LoggingService>();
-builder.Services.AddScoped<ProductService>();
-builder.Services.AddScoped<UserService>();
-builder.Services.AddScoped<OrderService>();
-
 
 // IDataAccess via factory using normalized config-derived connection string
 builder.Services.AddScoped<IDataAccess>(_ =>
@@ -155,7 +161,7 @@ var jwtAudience = builder.Configuration["Jwt:Audience"];
 
 if (!string.IsNullOrWhiteSpace(jwtKey))
 {
-    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    builder.Services.AddAuthentication() // extend existing builder
         .AddJwtBearer(options =>
         {
             options.TokenValidationParameters = new TokenValidationParameters
@@ -206,7 +212,6 @@ builder.Services.AddScoped<TrustedContext>(provider =>
     return TrustedContextFactory.FromHttpContext(httpContext);
 });
 
-
 // ++++++++++++++ Functional Handlers + Policies + Pipeline Behaviors
 builder.Services.AddFunctionalHandlerWithPolicy<ChargeCustomerCommand, ChargeResult, ChargeCustomerHandler, ChargeCustomerPolicy>();
 builder.Services.AddFunctionalHandlerWithPolicy<GetCartForUserQuery, Cart, GetCartForUserHandler, GetCartForUserPolicy>();
@@ -216,16 +221,18 @@ builder.Services.AddFunctionalHandlerWithPolicy<AuthorizePaymentCommand, IntentT
 builder.Services.AddFunctionalHandlerWithPolicy<CapturePaymentCommand, Unit, CapturePaymentHandler, CapturePaymentPolicy>();
 builder.Services.AddFunctionalHandlerWithPolicy<RefundPaymentCommand, Unit, RefundPaymentHandler, RefundPaymentPolicy>();
 builder.Services.AddFunctionalHandlerWithPolicy<ApplyCreditCommand, Unit, ApplyCreditHandler, ApplyCreditPolicy>();
+// Newly registered add item to cart functional handler
+builder.Services.AddFunctionalHandlerWithPolicy<AddItemToCartCommand, AddItemToCartResult, AddItemToCartHandler, AddItemToCartPolicy>();
 builder.Services.AddFunctionalHandlerWithPolicy<AddCartLineCommand, CartSnapshot, AddCartLineHandler, CartMutationPolicy>();
 builder.Services.AddFunctionalHandlerWithPolicy<SetCartLineQuantityCommand, CartSnapshot, SetCartLineQuantityHandler, CartMutationPolicy>();
 builder.Services.AddFunctionalHandlerWithPolicy<RemoveCartLineCommand, CartSnapshot, RemoveCartLineHandler, CartMutationPolicy>();
 builder.Services.AddFunctionalHandlerWithPolicy<ClearCartCommand, CartSnapshot, ClearCartHandler, CartMutationPolicy>();
 builder.Services.AddScoped(typeof(IAuthorizationPolicy<>), typeof(AdminOnlyPolicy<>));
 builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(AuthorizationBehavior<,>));
-builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(ObservabilityBehavior<,>));
+builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(CancellationGuardBehaviour<,>));
 builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
 // ----------------
-
 
 // Misc services
 builder.Services.AddScoped<IPaymentProviderSelector, PaymentProviderSelector>();
@@ -237,7 +244,6 @@ builder.Services.AddScoped<ICartQueries, InMemoryCartQueries>();
 builder.Services.AddScoped<IOrderRepository, InMemoryOrderRepository>();
 builder.Services.AddScoped<IPricingService, BasicPricingService>();
 builder.Services.AddScoped<IInventoryService, NoopInventoryService>();
-
 
 builder.Services.AddRazorPages();
 

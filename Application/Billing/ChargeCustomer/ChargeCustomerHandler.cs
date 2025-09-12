@@ -3,21 +3,14 @@ using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
+using SmallShopBigAmbitions.Monads.TraceableTransformer.Extensions.BaseLinq;
 
 namespace SmallShopBigAmbitions.Application.Billing.ChargeCustomer;
 
-public class ChargeCustomerHandler : IFunctionalHandler<ChargeCustomerCommand, ChargeResult>
+public class ChargeCustomerHandler(BillingService billingService, CartService cartService) : IFunctionalHandler<ChargeCustomerCommand, ChargeResult>
 {
-    private readonly ILogger<BillingService> _logger;
-    private readonly BillingService _billingService;
-    private readonly CartService _cartService;
-
-    public ChargeCustomerHandler(ILogger<BillingService> logger, BillingService billingService, CartService cartService)
-    {
-        _logger = logger;
-        _billingService = billingService;
-        _cartService = cartService;
-    }
+    private readonly BillingService _billingService = billingService;
+    private readonly CartService _cartService = cartService;
 
     public IO<Fin<ChargeResult>> Handle(ChargeCustomerCommand request, TrustedContext context, CancellationToken ct)
     {
@@ -27,8 +20,7 @@ public class ChargeCustomerHandler : IFunctionalHandler<ChargeCustomerCommand, C
                 Succ: cart => _billingService
                     .ChargeCustomer(cart)
                     .RequireTrusted(context)
-                    .WithSpanName("ChargeCustomer")
-                    .WithLogging(_logger),
+                    .WithSpanName("ChargeCustomer"),
                 Fail: e => TraceableTLifts.FromFin(Fin<ChargeResult>.Fail(e), "charge.skip", _ => [])
             )
             select chargeFin;

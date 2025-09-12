@@ -8,7 +8,7 @@
 
 @if (!string.IsNullOrEmpty(Model.Message))
 {
-    <div class="alert alert-success">@Model.Message</div>
+    <div class="alert alert-info">@Model.Message</div>
 }
 
 <div class="row row-cols-1 row-cols-md-3 g-4">
@@ -27,9 +27,11 @@
             </div>
             <div class="card-footer d-flex justify-content-between align-items-center">
                 <strong>$@p.Price</strong>
-                <form method="post" asp-page-handler="AddToCart" class="m-0">
+                <form method="post" asp-page-handler="AddToCart" data-add-to-cart="true" class="m-0 d-flex align-items-center" style="gap:.25rem">
                     <input type="hidden" name="id" value="@p.Id" />
-                    <button type="submit" class="btn btn-sm btn-primary">Add to cart</button>
+                    <input type="hidden" name="price" value="@p.Price" /> <!-- the price must be snapshotted. what we display to the user here must be the same that we charge them-->
+                    <input type="number" name="quantity" value="1" min="1" class="form-control form-control-sm" style="width:4rem" />
+                    <button type="submit" class="btn btn-sm btn-primary">Add</button>
                 </form>
             </div>
         </div>

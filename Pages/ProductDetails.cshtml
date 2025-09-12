@@ -19,11 +19,16 @@ else
             <p class="text-muted">Category: @Model.Product.Category</p>
             <p>@Model.Product.Description</p>
             <h4>$@Model.Product.Price</h4>
-            <form method="post" asp-page-handler="AddToCart">
+            <form method="post" asp-page-handler="AddToCart" data-add-to-cart="true" class="d-flex align-items-center" style="gap:.5rem">
                 <input type="hidden" name="id" value="@Model.Product.Id" />
+                <input type="number" name="quantity" value="1" min="1" class="form-control" style="width:6rem" />
                 <button type="submit" class="btn btn-primary">Add to cart</button>
                 <a asp-page="/Products" class="btn btn-outline-secondary ms-2">Back to products</a>
             </form>
+            @if (!string.IsNullOrEmpty(Model.Message))
+            {
+                <div class="alert alert-info mt-3">@Model.Message</div>
+            }
         </div>
     </div>
 }

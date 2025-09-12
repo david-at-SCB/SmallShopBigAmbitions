@@ -26,7 +26,6 @@ public interface IHttpClient
 public class FunctionalHttpClient(System.Net.Http.HttpClient httpClient) : IHttpClient, IDisposable
 {
     private readonly System.Net.Http.HttpClient _httpClient = httpClient;
-    private readonly ILogger<FunctionalHttpClient> _logger = LoggerFactory.Create(builder => builder.AddConsole()).CreateLogger<FunctionalHttpClient>();
     private readonly ActivitySource _activitySource = ShopActivitySource.Instance;
 
 
@@ -155,7 +154,6 @@ public class FunctionalHttpClient(System.Net.Http.HttpClient httpClient) : IHttp
                 .Map(fin => fin.Map(products => Seq(products.AsEnumerable()))),
             maxRetries: maxRetries
         )
-        .WithAttributes(fin => HttpTelemetryAttributes.FromFin(fin, uri))
-        .WithLogging(_logger);
+        .WithAttributes(fin => HttpTelemetryAttributes.FromFin(fin, uri));
     }
 }

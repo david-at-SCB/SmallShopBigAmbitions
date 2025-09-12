@@ -1,0 +1,12 @@
+@model SmallShopBigAmbitions.Models.Cart
+@if (Model is null || Model.Items.IsEmpty)
+{
+    <div class="text-muted small">Cart is empty</div>
+}
+else
+{
+    <div class="small">
+        <strong>@Model.Items.Count</strong> item(s) • Total: @Model.Total("SEK").Amount @Model.Total("SEK").Currency
+    </div>
+}
+<a asp-page="/Cart" class="btn btn-sm btn-outline-primary mt-1">View Cart</a>

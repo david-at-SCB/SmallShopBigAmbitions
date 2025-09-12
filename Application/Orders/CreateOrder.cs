@@ -27,7 +27,7 @@ public interface IOrderRepository
 
 public sealed class InMemoryOrderRepository : IOrderRepository
 {
-    private readonly Dictionary<Guid, OrderSnapshot> _store = new();
+    private readonly Dictionary<Guid, OrderSnapshot> _store = [];
 
     public IO<Fin<OrderSnapshot>> Insert(OrderSnapshot order) => IO.lift<Fin<OrderSnapshot>>(() =>
     {
@@ -56,11 +56,10 @@ internal static class OrderIdem
 
         public static Guid Create(Guid ns, string name)
         {
-            using var sha1 = System.Security.Cryptography.SHA1.Create();
             var nsBytes = ns.ToByteArray();
             var nameBytes = System.Text.Encoding.UTF8.GetBytes(name);
             var data = nsBytes.Concat(nameBytes).ToArray();
-            var hash = sha1.ComputeHash(data);
+            var hash = System.Security.Cryptography.SHA1.HashData(data);
             var bytes = new byte[16];
             System.Array.Copy(hash, 0, bytes, 0, 16); // Explicitly specify System.Array to avoid ambiguity with LanguageExt.Prelude.Array
 
@@ -70,29 +69,16 @@ internal static class OrderIdem
     }
 }
 
-public static class TraceableTExtensionsOrder
-{
-    public static TraceableT<T> FromIOFin<T>(IO<Fin<T>> io, string spanName) => default!;
-
-    public static TraceableT<T> FromFin<T>(Fin<T> fin, string spanName, Func<T, Seq<(string, object)>> attrs) => default!;
-
-    public static TraceableT<T> WithLogging<T>(this TraceableT<T> t, ILogger logger) => t;
-
-    public static IO<Fin<T>> RunTraceable<T>(this TraceableT<T> t, CancellationToken ct) => default!;
-}
-
 public sealed class CreateOrderHandler(
     ICartQueries carts,
     IPricingService pricing,
     IOrderRepository orders,
-    IIdempotencyStore idem,
-    ILogger<CreateOrderHandler> logger) : IFunctionalHandler<CreateOrderCommand, OrderSnapshot>
+    IIdempotencyStore idem) : IFunctionalHandler<CreateOrderCommand, OrderSnapshot>
 {
     private readonly ICartQueries _carts = carts;
     private readonly IPricingService _pricing = pricing;
     private readonly IOrderRepository _orders = orders;
     private readonly IIdempotencyStore _idem = idem;
-    private readonly ILogger _logger = logger;
 
     public IO<Fin<OrderSnapshot>> Handle(CreateOrderCommand request, TrustedContext context, CancellationToken ct)
     {
@@ -103,13 +89,13 @@ public sealed class CreateOrderHandler(
                 "order.cart.fetch",
                 c => [KVP("cart.id", c.CartId), KVP("user.id", c.UserId)])
 
-                // 2) Pricing (unwrapped monies)
+            // 2) Pricing (unwrapped monies)
             from shipping in TraceableTLifts.FromIOFinThrowing(
                 _pricing.CalculateShipping(cart),
                 "order.pricing.shipping",
                 m => [KVP("shipping", m.Amount), KVP("currency", m.Currency)])
 
-            from discounts in TraceableTLifts.FromIOFinThrowing(
+            from discounts in TraceableTLifts.FromIOFinThrowing<Money>(
                 _pricing.CalculateDiscounts(cart),
                 "order.pricing.discounts",
                 m => [KVP("discount", m.Amount), KVP("currency", m.Currency)])

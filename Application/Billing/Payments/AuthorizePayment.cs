@@ -42,8 +42,7 @@ public sealed class AuthorizePaymentHandler(
             Metadata: Map<string, string>());
 
         var flow = TraceableTLifts
-            .FromIOFin(_dispatcher.Dispatch<IntentToPayCommand, IntentToPayDto>(cmd, ct), "payment.authorize")
-            .WithLogging(_logger);
+            .FromIOFin(_dispatcher.Dispatch<IntentToPayCommand, IntentToPayDto>(cmd, ct), "payment.authorize");
 
         return flow.RunTraceable(ct);
     }

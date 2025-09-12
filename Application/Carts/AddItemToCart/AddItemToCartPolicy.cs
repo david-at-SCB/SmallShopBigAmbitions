@@ -5,7 +5,7 @@ using SmallShopBigAmbitions.Monads.TraceableTransformer;
 using SmallShopBigAmbitions.Application._Policy;
 using static LanguageExt.Prelude;
 
-namespace SmallShopBigAmbitions.Application.Cart.AddItemToCart;
+namespace SmallShopBigAmbitions.Application.Carts.AddItemToCart;
 
 public class AddItemToCartPolicy : IAuthorizationPolicy<AddItemToCartCommand>
 {

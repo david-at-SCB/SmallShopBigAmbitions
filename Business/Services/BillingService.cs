@@ -16,77 +16,77 @@ namespace SmallShopBigAmbitions.Business.Services;
 
 public class BillingService
 {
-private readonly ILogger<BillingService> _logger;
+    private readonly ILogger<BillingService> _logger;
 
-public BillingService(ILogger<BillingService> logger)
-{
-    _logger = logger;
-}
+    public BillingService(ILogger<BillingService> logger)
+    {
+        _logger = logger;
+    }
 
-// Return a traceable billing attempt result
-public TraceableT<Fin<ChargeResult>> ChargeCustomer(Cart cart)
-{
-    return new TraceableT<Fin<ChargeResult>>(
-        Effect: IO.lift<Fin<ChargeResult>>(() =>
-        {
-            Thread.Sleep(1200); // Simulate billing delay
+    // Return a traceable billing attempt result
+    public TraceableT<Fin<ChargeResult>> ChargeCustomer(Cart cart)
+    {
+        return new TraceableT<Fin<ChargeResult>>(
+            Effect: IO.lift<Fin<ChargeResult>>(() =>
+            {
+                Thread.Sleep(1200); // Simulate billing delay
 
-            var transactionId = Guid.NewGuid();
-            var receiptId = Guid.NewGuid();
+                var transactionId = Guid.NewGuid();
+                var receiptId = Guid.NewGuid();
 
-            var res = new ChargeResult(
-                Message: Prelude.Some("Charge successful"),
-                Cart: cart.Id,
-                Customer: cart.CustomerId,
-                Transaction: transactionId,
-                Receipt: receiptId
-            );
+                var res = new ChargeResult(
+                    Message: Prelude.Some("Charge successful"),
+                    Cart: cart.Id,
+                    Customer: cart.CustomerId,
+                    Transaction: transactionId,
+                    Receipt: receiptId
+                );
 
-            return Fin<ChargeResult>.Succ(res);
-        }),
-        SpanName: "BillingService.ChargeCustomer",
-        Attributes: fin =>
-        {
-            return fin.Match(
-                Succ: r =>
-                [
-                    new KeyValuePair<string, object>("billing.success", true),
+                return Fin<ChargeResult>.Succ(res);
+            }),
+            SpanName: "BillingService.ChargeCustomer",
+            Attributes: fin =>
+            {
+                return fin.Match(
+                    Succ: r =>
+                    [
+                        new KeyValuePair<string, object>("billing.success", true),
                     new KeyValuePair<string, object>("billing.message", r.Message),
                     new KeyValuePair<string, object>("cart.id", r.Cart),
                     new KeyValuePair<string, object>("user.id", r.Customer),
                     new KeyValuePair<string, object>("transaction.id", r.Transaction),
                     new KeyValuePair<string, object>("receipt.id", r.Receipt)
-                ],
-                Fail: err => new[]
-                {
+                    ],
+                    Fail: err => new[]
+                    {
                     new KeyValuePair<string, object>("billing.success", false),
                     new KeyValuePair<string, object>("billing.error", err.Message)
-                }
-            );
-        }
-    ).WithLogging(_logger);
-}
+                    }
+                );
+            }
+        );
+    }
 
-public TraceableT<CheckoutUserResultDTO> CheckoutCustomerCart(Cart cart)
-{
-    // TODO: implement real logic
-    var chargedResult = new ChargeResult(
-        Message: Prelude.Some("Charge successful"),
-        Cart: cart.Id,
-        Customer: cart.CustomerId,
-        Transaction: Guid.NewGuid(),
-        Receipt: Guid.NewGuid()
-    );
+    public TraceableT<CheckoutUserResultDTO> CheckoutCustomerCart(Cart cart)
+    {
+        // TODO: implement real logic
+        var chargedResult = new ChargeResult(
+            Message: Some("Charge successful"),
+            Cart: cart.Id,
+            Customer: cart.CustomerId,
+            Transaction: Guid.NewGuid(),
+            Receipt: Guid.NewGuid()
+        );
 
-    var dto = TraceableTLifts.FromValue(
-        new CheckoutUserResultDTO(
-            CustomerId: cart.CustomerId,
-            Cart: cart,
-            Message: "Checkout completed successfully.",
-            Charged: Fin<ChargeResult>.Succ(chargedResult)
-        ),
-        spanName: "CustomerCharged");
+        var dto = TraceableTLifts.FromValue(
+            new CheckoutUserResultDTO(
+                CustomerId: cart.CustomerId,
+                Cart: cart,
+                Message: "Checkout completed successfully.",
+                Charged: Fin<ChargeResult>.Succ(chargedResult)
+            ),
+            spanName: "CustomerCharged");
 
-    return dto;
-}
+        return dto;
+    }
 }

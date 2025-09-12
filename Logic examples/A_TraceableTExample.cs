@@ -42,7 +42,7 @@ public static class C_ALittleMoreComplexTraceableTExample
                 new KeyValuePair<string, object>("user.id", userId),
                 new KeyValuePair<string, object>("billing.success", success)
                 }
-            ).WithLogging(logger);
+            );
     }
 
     private static class CartService
@@ -63,7 +63,7 @@ public static class C_ALittleMoreComplexTraceableTExample
                 new KeyValuePair<string, object>("user.id", userId),
                 new KeyValuePair<string, object>("cart.item.count", items.Count)
                 }
-            ).WithLogging(logger);
+            );
     }
 
     private static class OrderService
@@ -84,7 +84,7 @@ public static class C_ALittleMoreComplexTraceableTExample
                     new KeyValuePair<string, object>("order.id", orderId),
                     new KeyValuePair<string, object>("order.item.count", items.Count)
                 ]
-            ).WithLogging(logger);
+            );
     }
 }
 
@@ -120,19 +120,19 @@ public class A_TraceableTExample
               MockDb.GetUserProfile(user),
               "user.profile.fetch",
               TraceableTAttributes.FromFinOption<string>("profile")
-          ).WithLogging(logger);
+          );
 
         var tracedBadge = TraceableTLifts.FromIO(
             MockDb.GetUserProfileBadge(user),
             "user.badge.fetch",
             TraceableTAttributes.FromFinOption<string>("badge")
-        ).WithLogging(logger);
+        );
 
         var tracedExtra = TraceableTLifts.FromIO(
             MockDb.GetMoreUserStuff(user),
             "user.extra.fetch",
             TraceableTAttributes.FromFinOption<string>("extra")
-        ).WithLogging(logger);
+        );
 
         // run the 3 calls in parallel using Fork
         return

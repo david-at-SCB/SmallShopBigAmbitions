@@ -8,8 +8,8 @@
 // - Pass CancellationToken from handler to service.
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using SmallShopBigAmbitions.Application.Cart.AddItemToCart;
 using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
+using SmallShopBigAmbitions.Application.Carts.AddItemToCart;
 using SmallShopBigAmbitions.Application.HelloWorld;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Logic_examples;
@@ -32,7 +32,7 @@ public class IndexModel : PageModel
 
     public Option<Fin<Cart>> Cart { get; private set; }
 
-    public Option<Fin<AddItemToCartDTO>> AddItemResult { get; private set; }
+    public Option<Fin<AddItemToCartResult>> AddItemResult { get; private set; }
 
     [BindProperty]
     public string? HelloResult { get; set; }
@@ -70,7 +70,7 @@ public class IndexModel : PageModel
         {
             var err = qtyFin.Match(Succ: _ => Error.New("unreachable"), Fail: e => e);
             ModelState.AddModelError(string.Empty, err.Message);
-            AddItemResult = Option<Fin<AddItemToCartDTO>>.Some(Fin<AddItemToCartDTO>.Fail(err));
+            AddItemResult = Option<Fin<AddItemToCartResult>>.Some(Fin<AddItemToCartResult>.Fail(err));
             return Page();
         }
 
@@ -80,14 +80,14 @@ public class IndexModel : PageModel
             userId,
             new ExternalProductRef(1),
             qtyVal,
-            PriceRef: new("SEK", 150), // TODO: realistic price from product service
+            PriceRef: new("SEK", 150),
             Source: "index.page");
 
-        var result = await _dispatcher.Dispatch<AddItemToCartCommand, AddItemToCartDTO>(cmd, ct).RunAsync();
+        var result = await _dispatcher.Dispatch<AddItemToCartCommand, AddItemToCartResult>(cmd, ct).RunAsync();
 
         AddItemResult = result.Match(
-            Succ: dto => Option<Fin<AddItemToCartDTO>>.Some(dto),
-            Fail: err => Option<Fin<AddItemToCartDTO>>.Some(Fin<AddItemToCartDTO>.Fail(err))
+            Succ: r => Option<Fin<AddItemToCartResult>>.Some(r),
+            Fail: err => Option<Fin<AddItemToCartResult>>.Some(Fin<AddItemToCartResult>.Fail(err))
         );
 
         return Page();

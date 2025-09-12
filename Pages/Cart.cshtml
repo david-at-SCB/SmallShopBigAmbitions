@@ -1,0 +1,41 @@
+@page
+@model SmallShopBigAmbitions.Pages.CartModel
+@{
+    ViewData["Title"] = "Your Cart";
+}
+<h1>Your Cart</h1>
+@if (Model.Cart is null || Model.Cart.Items.IsEmpty)
+{
+    <div class="alert alert-info">Your cart is empty.</div>
+}
+else
+{
+    <table class="table table-sm align-middle">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th class="text-end">Qty</th>
+                <th class="text-end">Unit Price</th>
+                <th class="text-end">Line Total</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var line in Model.Cart.Items.Values)
+        {
+            <tr>
+                <td>@line.ProductId.Value</td>
+                <td class="text-end">@line.Quantity</td>
+                <td class="text-end">@line.UnitPrice.Amount @line.UnitPrice.Currency</td>
+                <td class="text-end">@(line.UnitPrice.Amount * line.Quantity) @line.UnitPrice.Currency</td>
+            </tr>
+        }
+        </tbody>
+        <tfoot>
+            <tr class="fw-bold">
+                <td colspan="3" class="text-end">Subtotal</td>
+                <td class="text-end">@Model.Subtotal.Amount @Model.Subtotal.Currency</td>
+            </tr>
+        </tfoot>
+    </table>
+}
+<a asp-page="/Products" class="btn btn-outline-secondary">Continue Shopping</a>

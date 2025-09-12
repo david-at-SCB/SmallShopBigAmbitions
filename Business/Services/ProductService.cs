@@ -37,8 +37,7 @@ public class ProductService(FunctionalHttpClient http, ILogger<ProductService> l
          effect: _http.GetJsonFinAsync<ProductDto>($"https://fakestoreapi.com/products/{id}", ct),
          maxRetries: maxRetries
      )
-     .WithAttributes(fin => HttpTelemetryAttributes.FromFin(fin, $"https://fakestoreapi.com/products/{id}"))
-     .WithLogging(_logger);
+     .WithAttributes(fin => HttpTelemetryAttributes.FromFin(fin, $"https://fakestoreapi.com/products/{id}"));
 
 
     public TraceableT<Fin<Seq<ProductDto>>> GetAllProducts(int maxRetries = 3, CancellationToken ct = default)
@@ -51,8 +50,7 @@ public class ProductService(FunctionalHttpClient http, ILogger<ProductService> l
                 .Map(fin => fin.Map(products => Seq(products.AsEnumerable()))),
             maxRetries: maxRetries
         )
-        .WithAttributes(fin => HttpTelemetryAttributes.FromFin(fin, uri))
-        .WithLogging(_logger);
+        .WithAttributes(fin => HttpTelemetryAttributes.FromFin(fin, uri));
     }
 
     internal async Task<List<FakeStoreProduct>> GetProductsAsync(CancellationToken ct)

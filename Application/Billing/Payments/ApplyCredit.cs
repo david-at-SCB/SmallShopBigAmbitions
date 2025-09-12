@@ -30,18 +30,15 @@ public interface ICreditService
 }
 
 public sealed class ApplyCreditHandler(
-    ICreditService credits,
-    ILogger<ApplyCreditHandler> logger
+    ICreditService credits
 ) : IFunctionalHandler<ApplyCreditCommand, Unit>
 {
     private readonly ICreditService _credits = credits;
-    private readonly ILogger _logger = logger;
 
     public IO<Fin<Unit>> Handle(ApplyCreditCommand request, TrustedContext context, CancellationToken ct)
     {
         var flow = TraceableTLifts
-            .FromIOFin(_credits.Apply(request.OrderId, request.Code), "order.apply_credit")
-            .WithLogging(_logger);
+            .FromIOFin(_credits.Apply(request.OrderId, request.Code), "order.apply_credit");
 
         return flow.RunTraceable(ct);
     }

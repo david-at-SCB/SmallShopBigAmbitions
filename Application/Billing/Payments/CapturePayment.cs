@@ -26,13 +26,11 @@ public sealed class CapturePaymentHandler(
 ) : IFunctionalHandler<CapturePaymentCommand, Unit>
 {
     private readonly IPaymentCaptureService _capture = capture;
-    private readonly ILogger _logger = logger;
 
     public IO<Fin<Unit>> Handle(CapturePaymentCommand request, TrustedContext context, CancellationToken ct)
     {
         var flow = TraceableTLifts
-            .FromIOFin(_capture.Capture(request.PaymentIntentId), "payment.capture")
-            .WithLogging(_logger);
+            .FromIOFin(_capture.Capture(request.PaymentIntentId), "payment.capture");
 
         return flow.RunTraceable(ct);
     }

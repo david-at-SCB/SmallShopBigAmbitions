@@ -1,20 +1,20 @@
-﻿using SmallShopBigAmbitions.Auth;
+﻿using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
+using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
+using SmallShopBigAmbitions.Monads.TraceableTransformer.Extensions.BaseLinq;
 
-namespace SmallShopBigAmbitions.Application.Cart.GetCartForUser;
+namespace SmallShopBigAmbitions.Application.Carts.GetCartForUser;
 
 public class GetCartForUserHandler : IFunctionalHandler<GetCartForUserQuery, Models.Cart>
 {
     private readonly CartService _cartService;
-    private readonly ILogger<GetCartForUserHandler> _logger;
 
-    public GetCartForUserHandler(CartService cartService, ILogger<GetCartForUserHandler> logger)
+    public GetCartForUserHandler(CartService cartService)
     {
         _cartService = cartService;
-        _logger = logger;
     }
 
     public IO<Fin<Models.Cart>> Handle(GetCartForUserQuery request, TrustedContext context, CancellationToken ct)
@@ -23,7 +23,6 @@ public class GetCartForUserHandler : IFunctionalHandler<GetCartForUserQuery, Mod
             from auth in TraceableTLifts.FromIOFin(AuthorizationGuards.RequireTrustedFin(context), "auth.ensure_trusted")
             from cartFin in _cartService.GetCartForUser(request.UserId)
                 .WithSpanName("cart.fetch_user")
-                .WithLogging(_logger)
             select cartFin;
 
         return tracedCart.RunTraceable(ct);

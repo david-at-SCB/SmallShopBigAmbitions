@@ -7,8 +7,6 @@
 // - Map DTO -> domain in a mapper; keep IO layer DTO-focused.
 // - Ensure DI registers FunctionalHttpClient and service; no static singletons.
 // - Add .WithLogging and telemetry attributes where useful.
-using SmallShopBigAmbitions.Application.Billing.CheckoutUser;
-using SmallShopBigAmbitions.Application.Cart.AddItemToCart;
 using SmallShopBigAmbitions.Database;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;

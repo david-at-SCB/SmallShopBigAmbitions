@@ -1,6 +1,8 @@
-﻿namespace SmallShopBigAmbitions.Monads.TraceableTransformer;
+﻿#pragma warning disable IDE0130 // needs separate namespace for linq extensions where SelectMany with same function signature exists
+namespace SmallShopBigAmbitions.Monads.TraceableTransformer.Extensions.BaseLinq;
+#pragma warning restore IDE0130
 
-public static class TraceableTLinqExtensions
+public static class BaseLinq
 {
     public static TraceableT<B> Select<A, B>(this TraceableT<A> ta, Func<A, B> f) =>
         ta.Map(f);
@@ -16,3 +18,5 @@ public static class TraceableTLinqExtensions
         Func<A, TraceableT<B>> bind) =>
         ta.Bind(bind);
 }
+
+

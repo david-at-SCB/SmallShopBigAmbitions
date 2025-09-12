@@ -4,7 +4,7 @@ using static LanguageExt.Prelude;
 using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.Application._Policy;
 
-namespace SmallShopBigAmbitions.Application.Cart.AddItemToCart;
+namespace SmallShopBigAmbitions.Application.Carts.AddItemToCart;
 
 public static class AddItemToCartValidator
 {
@@ -13,7 +13,7 @@ public static class AddItemToCartValidator
 
     public static Validation<Seq<Error>, Unit> Validate(AddItemToCartCommand cmd, TrustedContext ctx, int currentDistinctLines) =>
         RuleCombiner.Apply(
-            Rule.From("auth", () => ctx.IsAuthenticated, ErrorCodes.Auth_Unauthorized),
+            Rule.From("user_present", () => ctx.IsAuthenticated || cmd.UserId != Guid.Empty, ErrorCodes.Auth_Unauthorized),
             Rule.From("qty_positive", () => cmd.Quantity.Value > 0, ErrorCodes.Cart_Add_QuantityNonPositive),
             Rule.From("qty_limit", () => cmd.Quantity.Value <= MaxQuantityPerLine, ErrorCodes.Cart_Add_QuantityTooLarge),
             Rule.From("currency_present", () => !string.IsNullOrWhiteSpace(cmd.PriceRef.Currency), ErrorCodes.Cart_Add_CurrencyMissing),

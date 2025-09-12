@@ -10,7 +10,8 @@ public static class GetCartForUserValidator
 {
     public static Validation<Seq<Error>, Unit> Validate(GetCartForUserQuery cmd, TrustedContext ctx) =>
         RuleCombiner.Apply(
-            Rule.From("role_service", () => ctx.Role == "Service", ErrorCodes.Auth_InsufficientRole)
+            // Allow if authenticated OR caller id matches requested user id (anon cart) and not empty
+            Rule.From("self_or_authed", () => ctx.IsAuthenticated || (ctx.CallerId != Guid.Empty && ctx.CallerId == cmd.UserId), ErrorCodes.Auth_Unauthorized)
         );
 }
 

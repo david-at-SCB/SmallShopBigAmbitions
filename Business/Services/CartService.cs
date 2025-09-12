@@ -7,7 +7,6 @@
 // - Map DTO -> domain in a mapper; keep IO layer DTO-focused.
 // - Ensure DI registers FunctionalHttpClient and service; no static singletons.
 // - Add .WithLogging and telemetry attributes where useful.
-using LanguageExt;
 using SmallShopBigAmbitions.Database;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
@@ -17,13 +16,14 @@ namespace SmallShopBigAmbitions.Business.Services;
 public interface ICartService
 {
     TraceableT<Fin<Cart>> GetCartForUser(Guid userId);
+
     TraceableT<Fin<Cart>> AddItems(Cart cart, HashMap<ProductId, CartLine> items);
+
     Cart GetCartByUserId(Guid userId);
 }
 
-public class CartService(ILogger<CartService> logger, IDataAccess dataAccess) : ICartService
+public class CartService(IDataAccess dataAccess) : ICartService
 {
-    private readonly ILogger<CartService> _logger = logger;
     private readonly IDataAccess _dataAccess = dataAccess;
 
     public TraceableT<Fin<Cart>> GetCartForUser(Guid userId) =>
@@ -37,8 +37,7 @@ public class CartService(ILogger<CartService> logger, IDataAccess dataAccess) : 
                     new KeyValuePair<string, object>("cart.item.count", c.Items.Count)
                 },
                 Fail: e => new[] { new KeyValuePair<string, object>("error", e.Message) }
-            ))
-            .WithLogging(_logger);
+            ));
 
     public TraceableT<Fin<Cart>> AddItems(Cart cart, HashMap<ProductId, CartLine> items) =>
         TraceableTLifts.FromIOFin(
@@ -67,8 +66,7 @@ public class CartService(ILogger<CartService> logger, IDataAccess dataAccess) : 
                     new KeyValuePair<string, object>("cart.item.count", c.Items.Count)
                 },
                 Fail: e => new[] { new KeyValuePair<string, object>("error", e.Message) }
-            ))
-            .WithLogging(_logger);
+            ));
 
     public Cart GetCartByUserId(Guid userId) =>
         GetCartForUser(userId)

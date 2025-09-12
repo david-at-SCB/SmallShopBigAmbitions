@@ -6,6 +6,8 @@ using SmallShopBigAmbitions.Application._Policy;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Database;
 using static LanguageExt.Prelude;
+using SmallShopBigAmbitions.Monads.Traceable;
+using SmallShopBigAmbitions.Monads.TraceableTransformer;
 
 namespace SmallShopBigAmbitions.Database.Commands;
 
@@ -168,25 +170,37 @@ public sealed class CartPersistenceImplementation(DatabaseConfig cfg, ILogger<Ca
 }
 
 // Handlers
-public sealed class AddCartLineHandler(ICartPersistence carts, ILogger<AddCartLineHandler> logger) : IFunctionalHandler<AddCartLineCommand, CartSnapshot>
+public sealed class AddCartLineHandler(ICartPersistence carts) : IFunctionalHandler<AddCartLineCommand, CartSnapshot>
 {
     public IO<Fin<CartSnapshot>> Handle(AddCartLineCommand request, TrustedContext context, CancellationToken ct) =>
         carts.AddLine(request.CartId, request.UserId, request.ProductId, request.Quantity, request.UnitPrice);
 }
 
-public sealed class SetCartLineQuantityHandler(ICartPersistence carts, ILogger<SetCartLineQuantityHandler> logger) : IFunctionalHandler<SetCartLineQuantityCommand, CartSnapshot>
+public sealed class SetCartLineQuantityHandler(ICartPersistence carts) : IFunctionalHandler<SetCartLineQuantityCommand, CartSnapshot>
 {
-    public IO<Fin<CartSnapshot>> Handle(SetCartLineQuantityCommand request, TrustedContext context, CancellationToken ct) =>
-        carts.SetLine(request.CartId, request.UserId, request.ProductId, request.Quantity);
-}
+    public IO<Fin<CartSnapshot>> Handle(SetCartLineQuantityCommand request, TrustedContext context, CancellationToken ct)
+    {
+     var trace = TraceableTLifts.FromIO(carts.SetLine(request.CartId, request.UserId, request.ProductId, request.Quantity),
+         "cart.Set_CartLine",
+         () => new[]
+         {
+                new KeyValuePair<string, object>("cart.id", request.CartId),
+                new KeyValuePair<string, object>("user.id", request.UserId),
+                new KeyValuePair<string, object>("product.id", request.ProductId),
+                new KeyValuePair<string, object>("quantity", request.Quantity)
+         });
+        // TODO: MAKE THE TRACE, HANDLE THE RETURN
 
-public sealed class RemoveCartLineHandler(ICartPersistence carts, ILogger<RemoveCartLineHandler> logger) : IFunctionalHandler<RemoveCartLineCommand, CartSnapshot>
+}// run Traceable?
+    }
+
+public sealed class RemoveCartLineHandler(ICartPersistence carts) : IFunctionalHandler<RemoveCartLineCommand, CartSnapshot>
 {
     public IO<Fin<CartSnapshot>> Handle(RemoveCartLineCommand request, TrustedContext context, CancellationToken ct) =>
         carts.RemoveLine(request.CartId, request.UserId, request.ProductId);
 }
 
-public sealed class ClearCartHandler(ICartPersistence carts, ILogger<ClearCartHandler> logger) : IFunctionalHandler<ClearCartCommand, CartSnapshot>
+public sealed class ClearCartHandler(ICartPersistence carts) : IFunctionalHandler<ClearCartCommand, CartSnapshot>
 {
     public IO<Fin<CartSnapshot>> Handle(ClearCartCommand request, TrustedContext context, CancellationToken ct) =>
         carts.Clear(request.CartId, request.UserId);

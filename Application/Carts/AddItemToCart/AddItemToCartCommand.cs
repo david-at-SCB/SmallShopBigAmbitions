@@ -1,7 +1,7 @@
 ﻿using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Models;
 
-namespace SmallShopBigAmbitions.Application.Cart.AddItemToCart;
+namespace SmallShopBigAmbitions.Application.Carts.AddItemToCart;
 
 public record AddItemToCartCommand(
     Guid UserId,
@@ -9,4 +9,4 @@ public record AddItemToCartCommand(
     Quantity Quantity,
     Money PriceRef,
     string Source)
-    : IFunctionalRequest<AddItemToCartDTO>;
+    : IFunctionalRequest<AddItemToCartResult>;

@@ -1,4 +1,5 @@
-﻿using System.Collections.Immutable;
+﻿using SmallShopBigAmbitions.Monads.Traceable;
+using System.Collections.Immutable;
 
 namespace SmallShopBigAmbitions.Monads.TraceableTransformer;
 
@@ -65,9 +66,9 @@ public static class TraceableTLifts
         Func<A, HashMap<string, object>> attributes) =>
         new(effect, spanName, a => attributes(a));
 
-   /// <summary>
-   /// Overload: Create a new TraceableT without attributes
-   /// </summary>
+    /// <summary>
+    /// Overload: Create a new TraceableT without attributes
+    /// </summary>
     public static TraceableT<T> FromIO<T>(IO<T> io, string spanName) =>
         new(io, spanName);
 

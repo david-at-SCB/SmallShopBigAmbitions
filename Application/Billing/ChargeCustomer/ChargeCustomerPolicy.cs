@@ -13,7 +13,7 @@ public static class ChargeCustomerValidator
     {
         var cartValidation = cmd.Cart.ValidateForCharge().Match(
             Succ: _ => Success<Seq<Error>, Unit>(unit),
-            Fail: e => Fail<Seq<Error>, Unit>(Seq1(e)));
+            Fail: e => Fail<Seq<Error>, Unit>(Seq(e)));
 
         return RuleCombiner.Apply(
             Rule.From("auth", () => ctx.IsAuthenticated, ErrorCodes.Auth_Unauthorized),

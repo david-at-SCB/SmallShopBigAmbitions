@@ -14,8 +14,12 @@ public static class TrustedContextFactory
 
         string? Find(string type) => user?.FindFirstValue(type);
 
-        var sub = Find(ClaimTypes.NameIdentifier) ?? Find("sub");
+        var sub = Find(ClaimTypes.NameIdentifier) ?? Find("sub") ?? Find("oid");
         var callerId = Guid.TryParse(sub, out var parsed) ? parsed : Guid.Empty;
+
+        // Dummy auth detection
+        var authKind = Find("auth_kind");
+        var isDummy = authKind == "dummy";
 
         // If not authenticated, fall back to AnonymousId cookie as callerId
         if (!isAuthed && httpContext is not null && httpContext.Request.Cookies.TryGetValue(AnonymousIdCookieName, out var anon)
@@ -37,17 +41,16 @@ public static class TrustedContextFactory
             exp = DateTimeOffset.FromUnixTimeSeconds(seconds);
         }
 
-        // scopes: either "scope" (space-delimited) or role claims
         var scopeStr = Find("scope");
-        var scopes = (scopeStr is null)
-            ? System.Array.Empty<string>()
-            : scopeStr.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var scopes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(scopeStr)) scopes.AddRange(scopeStr.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        if (isDummy) scopes.Add("dummy");
 
         return new TrustedContext
         {
             CallerId = callerId,
             Role = role,
-            IsAuthenticated = isAuthed,
+            IsAuthenticated = isAuthed || isDummy, // treat dummy as authenticated for lower-tier flows
             JwtId = jti,
             Issuer = iss,
             ExpiresAt = exp,

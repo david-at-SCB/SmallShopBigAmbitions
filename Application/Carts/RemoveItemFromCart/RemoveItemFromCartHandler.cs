@@ -9,10 +9,8 @@ using CartModel = SmallShopBigAmbitions.Models.Cart;
 namespace SmallShopBigAmbitions.Application.Cart.RemoveItemFromCart;
 
 public class RemoveItemFromCartHandler(
-    ILogger<BillingService> logger,
     CartService cartService) : IFunctionalHandler<RemoveItemFromCartCommand, RemoveItemFromCartDTO>
 {
-    private readonly ILogger<BillingService> _logger = logger;
     private readonly CartService _cartService = cartService;
 
     public IO<Fin<RemoveItemFromCartDTO>> Handle(RemoveItemFromCartCommand request, TrustedContext context, CancellationToken ct)
@@ -57,8 +55,7 @@ public class RemoveItemFromCartHandler(
                         Succ: tuple => BuildResult(tuple.cart, tuple.removedQty),
                         Fail: error => TraceableTLifts.FromFin(Fin<RemoveItemFromCartDTO>.Fail(error), "cart.remove_item.failed", _ => []))),
                 Fail: e => TraceableTLifts.FromFin(Fin<RemoveItemFromCartDTO>.Fail(e), "cart.fetch.fail", _ => [])))
-            .WithSpanName("cart.remove_item.flow")
-            .WithLogging(_logger);
+            .WithSpanName("cart.remove_item.flow");
 
         return flow.RunTraceable(ct);
     }
