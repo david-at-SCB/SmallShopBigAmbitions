@@ -8,17 +8,18 @@ using static LanguageExt.Prelude;
 using SmallShopBigAmbitions.Monads.LanguageExtExtensions; // optional: LINQ helpers for IO<Fin<>
 using SmallShopBigAmbitions.Application._Abstractions;
 using SmallShopBigAmbitions.Application._Policy;
+using SmallShopBigAmbitions.Auth;
 
 public static class CreateIntentToPayValidator
 {
     public static Validation<Seq<Error>, Unit> Validate(IntentToPayCommand cmd, CartSnapshot cart) =>
         RuleCombiner.Apply(
-            Rule.From("method", () => cmd.Method != default, ErrorCodes.Payment_Intent_MethodRequired),
+            Rule.From("method_present", () => cmd.Method != PaymentMethod.Unknown, ErrorCodes.Payment_Intent_MethodRequired),
             Rule.From("cart_non_empty", () => !cart.Items.IsEmpty, ErrorCodes.Payment_Intent_CartEmpty)
         );
 }
 
-public sealed class CreateIntentToPayPolicy
+public sealed class CreateIntentToPayPolicy : IAuthorizationPolicy<IntentToPayCommand>
 {
     private readonly ICartQueries _carts;
     private readonly IPaymentProviderSelector _providers;
@@ -27,6 +28,15 @@ public sealed class CreateIntentToPayPolicy
     public CreateIntentToPayPolicy(ICartQueries carts, IPaymentProviderSelector providers, IInventoryService inventory) =>
         (_carts, _providers, _inventory) = (carts, providers, inventory);
 
+    // Authorization only (no I/O): keep cheap
+    public Fin<Unit> Authorize(IntentToPayCommand request, TrustedContext context)
+    {
+        if (context.IsAuthenticated || context.CallerId != Guid.Empty)
+            return FinSucc(Unit.Default);
+        return FinFail<Unit>(Error.New("payment.intent.unauthorized"));
+    }
+
+    // Domain preconditions + provider resolution
     public IO<Fin<(CartSnapshot Cart, IPaymentProvider Provider)>> Check(IntentToPayCommand cmd) =>
         IO.lift<Fin<(CartSnapshot, IPaymentProvider)>>(() =>
         {
@@ -37,12 +47,12 @@ public sealed class CreateIntentToPayPolicy
                 return validationFin.Bind(_ =>
                 {
                     var providerFin = _providers.Resolve(cmd.Method);
-                    return providerFin.Bind((IPaymentProvider provider) => // CS9236
+                    return providerFin.Bind((IPaymentProvider provider) =>
                     {
                         var availableFin = _inventory.EnsureAvailable(cart.Items.Values.ToSeq()).Run();
                         return availableFin.Match(
-                            Succ: _ => Fin<(CartSnapshot, IPaymentProvider)>.Succ((cart, provider)), // CS9236
-                            Fail: e => Fin<(CartSnapshot, IPaymentProvider)>.Fail(e)); // CS9236
+                            Succ: _ => Fin<(CartSnapshot, IPaymentProvider)>.Succ((cart, provider)),
+                            Fail: e => Fin<(CartSnapshot, IPaymentProvider)>.Fail(e));
                     });
                 });
             });

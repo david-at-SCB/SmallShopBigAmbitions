@@ -1,5 +1,6 @@
 ﻿using SmallShopBigAmbitions.Application._Abstractions;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
+using SmallShopBigAmbitions.Monads.TraceableTransformer.Extensions.BaseLinq;
 using SmallShopBigAmbitions.Models.Validation;
 using LanguageExt;
 namespace SmallShopBigAmbitions.Models;

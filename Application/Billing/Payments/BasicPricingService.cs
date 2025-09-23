@@ -1,7 +1,6 @@
 using LanguageExt;
 using SmallShopBigAmbitions.Application._Abstractions;
 using SmallShopBigAmbitions.Models;
-using static LanguageExt.Prelude;
 
 namespace SmallShopBigAmbitions.Application.Billing.Payments;
 

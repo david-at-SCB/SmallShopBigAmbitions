@@ -8,14 +8,140 @@ using SmallShopBigAmbitions.Database;
 using static LanguageExt.Prelude;
 using SmallShopBigAmbitions.Monads.Traceable;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
+using SmallShopBigAmbitions.Application._PipelineBehaviours; // Added for ITraceEnrichment
 
 namespace SmallShopBigAmbitions.Database.Commands;
 
-// Commands
-public sealed record AddCartLineCommand(Guid CartId, Guid UserId, Guid ProductId, int Quantity, Money UnitPrice) : IFunctionalRequest<CartSnapshot>;
-public sealed record SetCartLineQuantityCommand(Guid CartId, Guid UserId, Guid ProductId, int Quantity) : IFunctionalRequest<CartSnapshot>;
-public sealed record RemoveCartLineCommand(Guid CartId, Guid UserId, Guid ProductId) : IFunctionalRequest<CartSnapshot>;
-public sealed record ClearCartCommand(Guid CartId, Guid UserId) : IFunctionalRequest<CartSnapshot>;
+// Commands (now enriched for observability + result enrichment)
+public sealed record AddCartLineCommand(Guid CartId, Guid UserId, Guid ProductId, int Quantity, Money UnitPrice)
+    : IFunctionalRequest<CartSnapshot>, ITraceResultEnrichment<CartSnapshot>
+{
+    public string? GetSpanName() => "cart.add_line";
+    public IEnumerable<(string Key, object? Value)> GetTraceAttributes()
+    {
+        yield return ("cart.id", CartId);
+        yield return ("user.id", UserId);
+        yield return ("product.id", ProductId);
+        yield return ("quantity", Quantity);
+        yield return ("unit.price.amount", UnitPrice.Amount);
+        yield return ("unit.price.currency", UnitPrice.Currency);
+    }
+    // Fix for CS8602: Dereference of a possibly null reference.
+    // Update all usages of 'snap.Items.Count' and 'snap.Subtotal.Amount' to null-check 'snap' before dereferencing.
+
+    public IEnumerable<(string Key, object? Value)> GetResultAttributes(Fin<CartSnapshot> result)
+    {
+        yield return ("result.status", result.IsSucc ? "success" : "failure");
+        if (result.IsSucc)
+        {
+            var snap = result.Match(s => s, _ => default(CartSnapshot));
+            if (snap != null)
+            {
+                yield return ("cart.items.count", snap.Items.Count);
+                yield return ("cart.subtotal", snap.Subtotal.Amount);
+            }
+        }
+        else
+        {
+            var msg = result.Match(_ => null as string, e => e.Message);
+            if (msg is not null)
+                yield return ("error.message", msg);
+        }
+    }
+}
+
+public sealed record SetCartLineQuantityCommand(Guid CartId, Guid UserId, Guid ProductId, int Quantity)
+    : IFunctionalRequest<CartSnapshot>, ITraceResultEnrichment<CartSnapshot>
+{
+    public string? GetSpanName() => "cart.set_line_quantity";
+    public IEnumerable<(string Key, object? Value)> GetTraceAttributes()
+    {
+        yield return ("cart.id", CartId);
+        yield return ("user.id", UserId);
+        yield return ("product.id", ProductId);
+        yield return ("quantity", Quantity);
+    }
+    public IEnumerable<(string Key, object? Value)> GetResultAttributes(Fin<CartSnapshot> result)
+    {
+        yield return ("result.status", result.IsSucc ? "success" : "failure");
+        if (result.IsSucc)
+        {
+            var snap = result.Match(s => s, _ => default(CartSnapshot));
+            if (snap != null)
+            {
+                yield return ("cart.items.count", snap.Items.Count);
+                yield return ("cart.subtotal", snap.Subtotal.Amount);
+            }
+        }
+        else
+        {
+            var msg = result.Match(_ => null as string, e => e.Message);
+            if (msg is not null)
+                yield return ("error.message", msg);
+        }
+    }
+}
+
+public sealed record RemoveCartLineCommand(Guid CartId, Guid UserId, Guid ProductId)
+    : IFunctionalRequest<CartSnapshot>, ITraceResultEnrichment<CartSnapshot>
+{
+    public string? GetSpanName() => "cart.remove_line";
+    public IEnumerable<(string Key, object? Value)> GetTraceAttributes()
+    {
+        yield return ("cart.id", CartId);
+        yield return ("user.id", UserId);
+        yield return ("product.id", ProductId);
+    }
+    public IEnumerable<(string Key, object? Value)> GetResultAttributes(Fin<CartSnapshot> result)
+    {
+        yield return ("result.status", result.IsSucc ? "success" : "failure");
+        if (result.IsSucc)
+        {
+            var snap = result.Match(s => s, _ => default(CartSnapshot));
+            if (snap != null)
+            {
+                yield return ("cart.items.count", snap.Items.Count);
+                yield return ("cart.subtotal", snap.Subtotal.Amount);
+            }
+        }
+        else
+        {
+            var msg = result.Match(_ => null as string, e => e.Message);
+            if (msg is not null)
+                yield return ("error.message", msg);
+        }
+    }
+}
+
+public sealed record ClearCartCommand(Guid CartId, Guid UserId)
+    : IFunctionalRequest<CartSnapshot>, ITraceResultEnrichment<CartSnapshot>
+{
+    public string? GetSpanName() => "cart.clear";
+    public IEnumerable<(string Key, object? Value)> GetTraceAttributes()
+    {
+        yield return ("cart.id", CartId);
+        yield return ("user.id", UserId);
+    }
+    public IEnumerable<(string Key, object? Value)> GetResultAttributes(Fin<CartSnapshot> result)
+    {
+        yield return ("result.status", result.IsSucc ? "success" : "failure");
+        if (result.IsSucc)
+        {
+            var snap = result.Match(s => s, _ => default(CartSnapshot));
+            if (snap != null)
+            {
+                yield return ("cart.items.count", snap.Items.Count);
+                yield return ("cart.subtotal", snap.Subtotal.Amount);
+            }
+        }
+        else
+        {
+            var msg = result.Match(_ => null as string, e => e.Message);
+            if (msg is not null)
+                yield return ("error.message", msg);
+        }
+    }
+}
 
 // Policy
 public sealed class CartMutationPolicy : IAuthorizationPolicy<AddCartLineCommand>,
@@ -48,24 +174,22 @@ public sealed class CartPersistenceImplementation(DatabaseConfig cfg, ILogger<Ca
         {
             EnsureCart(conn, cartId, userId);
             // Try update existing
-            using (var upd = conn.CreateCommand())
+            using var upd = conn.CreateCommand();
+            upd.CommandText = "UPDATE CartLines SET Quantity = Quantity + @Q WHERE CartId=@C AND ProductId=@P";
+            upd.Parameters.AddWithValue("@Q", qty);
+            upd.Parameters.AddWithValue("@C", cartId.ToString());
+            upd.Parameters.AddWithValue("@P", productId.ToString());
+            var rows = upd.ExecuteNonQuery();
+            if (rows == 0)
             {
-                upd.CommandText = "UPDATE CartLines SET Quantity = Quantity + @Q WHERE CartId=@C AND ProductId=@P";
-                upd.Parameters.AddWithValue("@Q", qty);
-                upd.Parameters.AddWithValue("@C", cartId.ToString());
-                upd.Parameters.AddWithValue("@P", productId.ToString());
-                var rows = upd.ExecuteNonQuery();
-                if (rows == 0)
-                {
-                    using var ins = conn.CreateCommand();
-                    ins.CommandText = "INSERT INTO CartLines (CartId, ProductId, Quantity, UnitPrice, Currency) VALUES (@C,@P,@Q,@U,@Cur)";
-                    ins.Parameters.AddWithValue("@C", cartId.ToString());
-                    ins.Parameters.AddWithValue("@P", productId.ToString());
-                    ins.Parameters.AddWithValue("@Q", qty);
-                    ins.Parameters.AddWithValue("@U", unitPrice.Amount);
-                    ins.Parameters.AddWithValue("@Cur", unitPrice.Currency);
-                    ins.ExecuteNonQuery();
-                }
+                using var ins = conn.CreateCommand();
+                ins.CommandText = "INSERT INTO CartLines (CartId, ProductId, Quantity, UnitPrice, Currency) VALUES (@C,@P,@Q,@U,@Cur)";
+                ins.Parameters.AddWithValue("@C", cartId.ToString());
+                ins.Parameters.AddWithValue("@P", productId.ToString());
+                ins.Parameters.AddWithValue("@Q", qty);
+                ins.Parameters.AddWithValue("@U", unitPrice.Amount);
+                ins.Parameters.AddWithValue("@Cur", unitPrice.Currency);
+                ins.ExecuteNonQuery();
             }
         });
 
@@ -139,7 +263,7 @@ public sealed class CartPersistenceImplementation(DatabaseConfig cfg, ILogger<Ca
             }
         });
 
-    private void EnsureCart(Microsoft.Data.Sqlite.SqliteConnection conn, Guid cartId, Guid userId)
+    private static void EnsureCart(Microsoft.Data.Sqlite.SqliteConnection conn, Guid cartId, Guid userId)
     {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "INSERT INTO Carts (Id, UserId) SELECT @Id,@U WHERE NOT EXISTS (SELECT 1 FROM Carts WHERE Id=@Id)";
@@ -148,7 +272,7 @@ public sealed class CartPersistenceImplementation(DatabaseConfig cfg, ILogger<Ca
         cmd.ExecuteNonQuery();
     }
 
-    private Fin<CartSnapshot> FetchSnapshot(Microsoft.Data.Sqlite.SqliteConnection conn, Guid cartId, Guid userId)
+    private static Fin<CartSnapshot> FetchSnapshot(Microsoft.Data.Sqlite.SqliteConnection conn, Guid cartId, Guid userId)
     {
         using var lines = conn.CreateCommand();
         lines.CommandText = "SELECT ProductId, Quantity, UnitPrice, Currency FROM CartLines WHERE CartId=@C";
@@ -178,21 +302,9 @@ public sealed class AddCartLineHandler(ICartPersistence carts) : IFunctionalHand
 
 public sealed class SetCartLineQuantityHandler(ICartPersistence carts) : IFunctionalHandler<SetCartLineQuantityCommand, CartSnapshot>
 {
-    public IO<Fin<CartSnapshot>> Handle(SetCartLineQuantityCommand request, TrustedContext context, CancellationToken ct)
-    {
-     var trace = TraceableTLifts.FromIO(carts.SetLine(request.CartId, request.UserId, request.ProductId, request.Quantity),
-         "cart.Set_CartLine",
-         () => new[]
-         {
-                new KeyValuePair<string, object>("cart.id", request.CartId),
-                new KeyValuePair<string, object>("user.id", request.UserId),
-                new KeyValuePair<string, object>("product.id", request.ProductId),
-                new KeyValuePair<string, object>("quantity", request.Quantity)
-         });
-        // TODO: MAKE THE TRACE, HANDLE THE RETURN
-
-}// run Traceable?
-    }
+    public IO<Fin<CartSnapshot>> Handle(SetCartLineQuantityCommand request, TrustedContext context, CancellationToken ct) =>
+        carts.SetLine(request.CartId, request.UserId, request.ProductId, request.Quantity);
+}
 
 public sealed class RemoveCartLineHandler(ICartPersistence carts) : IFunctionalHandler<RemoveCartLineCommand, CartSnapshot>
 {

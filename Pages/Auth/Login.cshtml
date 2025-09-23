@@ -1,0 +1,26 @@
+@page
+@model SmallShopBigAmbitions.Pages.Auth.LoginModel
+@{
+    ViewData["Title"] = "Login";
+}
+<h1>Login</h1>
+<p class="text-muted">Development password login (AlicePwd!, BobPwd!)</p>
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="alert alert-warning">@Model.Message</div>
+}
+<form method="post" class="mb-3" autocomplete="off">
+    <div class="mb-3">
+        <label class="form-label">Email</label>
+        <input asp-for="Email" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Password</label>
+        <input asp-for="Password" type="password" class="form-control" />
+    </div>
+    <button type="submit" class="btn btn-primary">Login</button>
+</form>
+<form method="post" asp-page-handler="Logout">
+    <button type="submit" class="btn btn-outline-secondary">Logout</button>
+</form>
+<a asp-page="/Index" class="btn btn-link mt-3">Back</a>

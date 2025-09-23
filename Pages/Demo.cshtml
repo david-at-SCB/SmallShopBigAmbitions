@@ -1,0 +1,117 @@
+@page
+@model SmallShopBigAmbitions.Pages.DemoModel
+@{
+    ViewData["Title"] = "End-to-End Demo";
+}
+<h1>End-to-End Demo</h1>
+<p class="text-muted">Flow: (Optional Login) -> Add Item -> Create Payment Intent -> Capture</p>
+
+<section class="mb-4 border rounded p-3">
+    <h4>1. Optional Login</h4>
+    <form method="post" asp-page-handler="Login" class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <input asp-for="LoginEmail" placeholder="Email" class="form-control" />
+        </div>
+        <div class="col-md-4">
+            <input asp-for="LoginPassword" type="password" placeholder="Password" class="form-control" />
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">Login</button>
+        </div>
+    </form>
+    @if (!string.IsNullOrEmpty(Model.LoginMessage))
+    {
+        <div class="alert alert-info mt-2">@Model.LoginMessage</div>
+    }
+</section>
+
+<section class="mb-4 border rounded p-3">
+    <h4>2. Add Item To Cart</h4>
+    <form method="post" asp-page-handler="AddItem">
+        <button type="submit" class="btn btn-success">Add Demo Item (Product=1)</button>
+    </form>
+    @if (Model.AddItemResult.IsSome)
+    {
+        var res = Model.AddItemResult.Match(Some: r => r, None: () => default!);
+        <div class="alert alert-secondary mt-2">
+            Add: @(res.Match(Succ: _ => "OK", Fail: e => $"Fail: {e.Message}"))
+        </div>
+    }
+</section>
+
+<section class="mb-4 border rounded p-3">
+    <h4>3. Cart Snapshot</h4>
+    @{ if (Model.Cart.IsSome)
+       {
+           var cartFin = Model.Cart.Match(Some: c => c, None: () => default!);
+           if (cartFin.IsSucc)
+           {
+               var cart = cartFin.Match(c => c, _ => null); }
+    }
+    }
+    @if (Model.Cart.IsSome)
+    {
+        var cartFin2 = Model.Cart.Match(Some: c => c, None: () => default!);
+        if (cartFin2.IsSucc)
+        {
+            var cart = cartFin2.Match(c => c, _ => null);
+            if (cart is not null)
+            {
+                <div>
+                    <strong>Cart Id:</strong> @cart.Id<br />
+                    <strong>User Id:</strong> @cart.CustomerId<br />
+                    <strong>Lines:</strong> @cart.Items.Count
+                </div>
+                <ul class="mt-2">
+                    @foreach (var line in cart.Items.Lines)
+                    {
+                        <li>@line.Value.Quantity x @line.Value.UnitPrice.Amount @line.Value.UnitPrice.Currency</li>
+                    }
+                </ul>
+            }
+        }
+        else
+        {
+            var err = cartFin2.Match(_ => null as Error, e => e);
+            if (err is not null)
+            {
+                <div class="text-danger">@err.Message</div>
+            }
+        }
+    }
+    else
+    {
+        <div class="text-muted">No cart yet.</div>
+    }
+</section>
+
+<section class="mb-4 border rounded p-3">
+    <h4>4. Create Payment Intent</h4>
+    <form method="post" asp-page-handler="CreateIntent">
+        <button type="submit" class="btn btn-warning">Create Payment Intent (Card)</button>
+    </form>
+    @if (Model.PaymentIntentResult.IsSome)
+    {
+        var res = Model.PaymentIntentResult.Match(Some: r => r, None: () => default!);
+        <div class="alert alert-info mt-2">
+            Intent: @(res.Match(Succ: dto => $"{dto.PaymentIntentId} Amount={dto.Amount} {dto.Currency}", Fail: e => $"Fail: {e.Message}"))
+        </div>
+    }
+</section>
+
+<section class="mb-4 border rounded p-3">
+    <h4>5. Capture Payment Intent</h4>
+    <form method="post" asp-page-handler="Capture">
+        <input type="hidden" name="paymentIntentId" value="@Model.CurrentPaymentIntentId" />
+        <button type="submit" class="btn btn-danger" @(Model.CurrentPaymentIntentId is null ? "disabled" : null)>Capture</button>
+    </form>
+    @if (Model.CaptureResult.IsSome)
+    {
+        var res = Model.CaptureResult.Match(Some: r => r, None: () => default!);
+        <div class="alert alert-dark mt-2">
+            Capture: @(res.Match(Succ: _ => "Success", Fail: e => $"Fail: {e.Message}"))
+        </div>
+    }
+</section>
+
+<a asp-page="/Index" class="btn btn-link">Back Home</a>

@@ -21,21 +21,6 @@
     }
 </section>
 
-<form method="post" asp-page-handler="AddItemsAndCheckout">
-    <input type="hidden" name="UserId" value="@Guid.NewGuid()" />
-    <button type="submit" class="btn btn-primary">Add demo item to cart</button>
-</form>
-
-@if (Model.AddItemResult.IsSome)
-{
-    var res = Model.AddItemResult.Match(
-        Some: r => r,
-        None: () => default!);
-    <div class="alert alert-info mt-3">
-        Add Item: @(res.Match(Succ: _ => "Success", Fail: e => $"Failed: {e.Message}"))
-    </div>
-}
-
 <section class="mt-4">
     <h2>Traceable Example Result</h2>
     <form method="post" asp-page-handler="RunExample">
@@ -46,6 +31,20 @@
         <pre>@Model.ResultMessage</pre>
     }
 </section>
+<br />
+<br />
+<br />
+
+<section>
+    <h2>Make test span</h2>
+    <form method="get" asp-page-handler="RunTestSpan">
+        <button type="submit" class="btn btn-secondary">Run Example</button>
+    </form>
+
+</section>
+<br />
+<br />
+<br />
 
 <section>
     <h2>
@@ -53,5 +52,3 @@
     </h2>
     <a asp-page="/Products" class="btn btn-secondary">Go to Products</a>
 </section>
-
-

@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using SmallShopBigAmbitions.TracingSources;
+﻿using SmallShopBigAmbitions.TracingSources;
 
 namespace SmallShopBigAmbitions.Monads.TraceableTransformer;
 
@@ -58,29 +57,6 @@ public record TraceableT<A>(
 
     public TraceableT<A> WithSpanName(string newSpanName) =>
         this with { SpanName = newSpanName };
-
-    /// <summary>Optional: record a span event instead of using ILogger. Safe to remove if you don’t want it.</summary>
-    public TraceableT<A> WithLoggingEvent(string? message = null, params (string Key, object? Value)[] fields) =>
-        this with
-        {
-            Attributes = Attributes is null
-                ? a => EmitEventAndReturnEmpty(a)
-                : a => (Attributes(a) ?? Enumerable.Empty<KeyValuePair<string, object>>())
-                        .Concat(EmitEventAndReturnEmpty(a))
-        };
-
-    private static IEnumerable<KeyValuePair<string, object>> EmitEventAndReturnEmpty(A a)
-    {
-        var activity = Activity.Current;
-        if (activity is not null)
-        {
-            var tags = new ActivityTagsCollection();
-            // Add any fields you want into the event as tags, if you call WithLoggingEvent(message, fields)
-            // Example only: left empty here.
-            activity.AddEvent(new ActivityEvent("TraceableT", tags: tags));
-        }
-        return Enumerable.Empty<KeyValuePair<string, object>>();
-    }
 
     // ---------- Pure, lazy composition (keep SpanName; drop attrs by default because the result type changes) ----------
 

@@ -22,6 +22,7 @@ using SmallShopBigAmbitions.Application.Carts.GetCartForUser; // added for dummy
 using SmallShopBigAmbitions.Application.HelloWorld;
 using SmallShopBigAmbitions.Application.Orders;
 using SmallShopBigAmbitions.Auth;
+using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.Database;
 using SmallShopBigAmbitions.Database.Commands;
 using SmallShopBigAmbitions.FunctionalDispatcher;
@@ -34,32 +35,42 @@ using SmallShopBigAmbitions.TracingSources;
 using System.Diagnostics;
 using System.Security.Claims;
 using System.Text;
+// Added for on-prem AD (Negotiate) + claims transformation
+using Microsoft.AspNetCore.Authentication.Negotiate;
+using Microsoft.AspNetCore.Authentication;
+using SmallShopBigAmbitions.Application.Billing.Payments.CreatePaymentIntent.PaymentProviders;
+using OpenTelemetry.Exporter; // IClaimsTransformation & SignIn
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Register dummy user store
 builder.Services.AddSingleton<IDummyUserStore, InMemoryDummyUserStore>();
 
-// Base authentication (cookie for dummy / impersonation)
+// Base authentication (cookie for dummy / impersonation) remains default for dev/testing.
+// We ALSO register Negotiate so pages can opt-in: [Authorize(AuthenticationSchemes = NegotiateDefaults.AuthenticationScheme)]
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultScheme = "DummyAuth";
+    options.DefaultScheme = "DummyAuth";            // keep dummy as default so existing flows unchanged
     options.DefaultChallengeScheme = "DummyAuth";
 })
 .AddCookie("DummyAuth", opts =>
 {
     opts.LoginPath = "/Auth/Impersonate";
     opts.AccessDeniedPath = "/Auth/Impersonate";
-});
+})
+.AddNegotiate(); // on-prem AD (Kerberos/NTLM) integration
 
-var serviceName = "SmallShopBigAmbitions.Webshop";
-builder.Services.AddSingleton(new ActivitySource("SmallShopBigAmbitions"));
+// Register claims transformer that will map AD group memberships to claims/roles
+builder.Services.AddScoped<IClaimsTransformation, AdGroupClaimsTransformer>();
+
+// Align the resource service.name with the site-wide ActivitySource name so spans & resource match
+var serviceName = Telemetry.SiteWideActivitySourceName;
 
 // ----- Connection String (config-driven + normalization)
 string rawCs = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("Missing ConnectionStrings:Default in configuration.");
 
-string NormalizeSqlite(string cs, string contentRoot)
+static string NormalizeSqlite(string cs, string contentRoot)
 {
     const string prefix = "Data Source=";
     if (!cs.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
@@ -101,17 +112,36 @@ builder.Services.AddLogging();
 ////// ------ SERILOG
 
 ////// ++++++ OPEN TELEMETRY
+builder.Services.AddSingleton(Telemetry.SiteWideServiceSource); // optional injection
 builder.Services.AddOpenTelemetry()
-    .ConfigureResource(resource => resource.AddService(serviceName))
+    .ConfigureResource(resource => resource
+        .AddService(serviceName, serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString())
+        .AddAttributes(new KeyValuePair<string, object>[]
+        {
+            new("deployment.environment", builder.Environment.EnvironmentName),
+            new("service.instance.id", Environment.MachineName)
+        }))
     .WithTracing(tracing => tracing
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation()
         .AddSource(
-            Telemetry.BillingSource.Name,
-            Telemetry.CartSource.Name,
-            Telemetry.MediatorSource.Name,
-            Telemetry.OrderSource.Name)
-        .AddOtlpExporter(o => o.Endpoint = new Uri("http://localhost:4317")))
+            Telemetry.BillingServiceSource.Name,
+            Telemetry.CartServiceSource.Name,
+            Telemetry.MediatorServiceSource.Name,
+            Telemetry.OrderServiceSource.Name,
+            Telemetry.SiteWideActivitySourceName)
+        .SetSampler(new AlwaysOnSampler())
+        .AddConsoleExporter() // TEMP: verify spans produced before relying solely on OTLP
+        .AddOtlpExporter(o =>
+        {
+            o.Endpoint = new Uri("http://localhost:4317"); // gRPC (Tempo)
+            o.Protocol = OtlpExportProtocol.Grpc; // default
+        })
+        .AddOtlpExporter(o =>
+        {
+            o.Endpoint = new Uri("http://localhost:4318");
+            o.Protocol = OtlpExportProtocol.HttpProtobuf;
+        }))
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation()
@@ -212,21 +242,23 @@ builder.Services.AddScoped<TrustedContext>(provider =>
     return TrustedContextFactory.FromHttpContext(httpContext);
 });
 
-// ++++++++++++++ Functional Handlers + Policies + Pipeline Behaviors
-builder.Services.AddFunctionalHandlerWithPolicy<ChargeCustomerCommand, ChargeResult, ChargeCustomerHandler, ChargeCustomerPolicy>();
-builder.Services.AddFunctionalHandlerWithPolicy<GetCartForUserQuery, Cart, GetCartForUserHandler, GetCartForUserPolicy>();
-builder.Services.AddFunctionalHandlerWithPolicy<HelloWorldRequest, string, HelloWorldHandler, HelloWorldPolicy>();
-builder.Services.AddFunctionalHandlerWithPolicy<CreateOrderCommand, OrderSnapshot, CreateOrderHandler, CreateOrderPolicy>();
+////++++++++++++++Functional Handlers + Policies + Pipeline Behaviors
+builder.Services.AddScoped<IAuthorizationPolicy<IntentToPayCommand>, CreateIntentToPayPolicy>();
+builder.Services.AddScoped<CreateIntentToPayPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<AddCartLineCommand, CartSnapshot, AddCartLineHandler, CartMutationPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<AddItemToCartCommand, AddItemToCartResult, AddItemToCartHandler, AddItemToCartPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<ApplyCreditCommand, Unit, ApplyCreditHandler, ApplyCreditPolicy>();
 builder.Services.AddFunctionalHandlerWithPolicy<AuthorizePaymentCommand, IntentToPayDto, AuthorizePaymentHandler, AuthorizePaymentPolicy>();
 builder.Services.AddFunctionalHandlerWithPolicy<CapturePaymentCommand, Unit, CapturePaymentHandler, CapturePaymentPolicy>();
-builder.Services.AddFunctionalHandlerWithPolicy<RefundPaymentCommand, Unit, RefundPaymentHandler, RefundPaymentPolicy>();
-builder.Services.AddFunctionalHandlerWithPolicy<ApplyCreditCommand, Unit, ApplyCreditHandler, ApplyCreditPolicy>();
-// Newly registered add item to cart functional handler
-builder.Services.AddFunctionalHandlerWithPolicy<AddItemToCartCommand, AddItemToCartResult, AddItemToCartHandler, AddItemToCartPolicy>();
-builder.Services.AddFunctionalHandlerWithPolicy<AddCartLineCommand, CartSnapshot, AddCartLineHandler, CartMutationPolicy>();
-builder.Services.AddFunctionalHandlerWithPolicy<SetCartLineQuantityCommand, CartSnapshot, SetCartLineQuantityHandler, CartMutationPolicy>();
-builder.Services.AddFunctionalHandlerWithPolicy<RemoveCartLineCommand, CartSnapshot, RemoveCartLineHandler, CartMutationPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<ChargeCustomerCommand, ChargeResult, ChargeCustomerHandler, ChargeCustomerPolicy>();
 builder.Services.AddFunctionalHandlerWithPolicy<ClearCartCommand, CartSnapshot, ClearCartHandler, CartMutationPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<CreateOrderCommand, OrderSnapshot, CreateOrderHandler, CreateOrderPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<GetCartForUserQuery, Cart, GetCartForUserHandler, GetCartForUserPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<HelloWorldRequest, string, HelloWorldHandler, HelloWorldPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<IntentToPayCommand, IntentToPayDto, CreateIntentToPayHandler, CreateIntentToPayPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<RefundPaymentCommand, Unit, RefundPaymentHandler, RefundPaymentPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<RemoveCartLineCommand, CartSnapshot, RemoveCartLineHandler, CartMutationPolicy>();
+builder.Services.AddFunctionalHandlerWithPolicy<SetCartLineQuantityCommand, CartSnapshot, SetCartLineQuantityHandler, CartMutationPolicy>();
 builder.Services.AddScoped(typeof(IAuthorizationPolicy<>), typeof(AdminOnlyPolicy<>));
 builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(AuthorizationBehavior<,>));
 builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(ObservabilityBehavior<,>));
@@ -235,6 +267,7 @@ builder.Services.AddScoped(typeof(IFunctionalPipelineBehavior<,>), typeof(Idempo
 // ----------------
 
 // Misc services
+builder.Services.AddScoped<IPaymentProvider, StripePaymentProvider>(); // Register StripePaymentProvider
 builder.Services.AddScoped<IPaymentProviderSelector, PaymentProviderSelector>();
 builder.Services.AddScoped<IPaymentRefundService, PaymentRefundService>();
 builder.Services.AddScoped<ICreditService, CreditService>();
@@ -244,6 +277,10 @@ builder.Services.AddScoped<ICartQueries, InMemoryCartQueries>();
 builder.Services.AddScoped<IOrderRepository, InMemoryOrderRepository>();
 builder.Services.AddScoped<IPricingService, BasicPricingService>();
 builder.Services.AddScoped<IInventoryService, NoopInventoryService>();
+builder.Services.AddScoped<ProductService>();
+builder.Services.AddScoped<BillingService>();
+builder.Services.AddScoped<CartService>();
+builder.Services.AddScoped<UserService>();
 
 builder.Services.AddRazorPages();
 
@@ -264,6 +301,12 @@ catch (Exception ex)
 
 var app = builder.Build();
 
+// Simple diagnostic to confirm ActivitySources are subscribed
+app.Lifetime.ApplicationStarted.Register(() =>
+{
+    Log.Information("[OTEL-DIAG] SiteWideActivitySource.HasListeners={HasListeners}", Telemetry.SiteWideServiceSource.HasListeners);
+});
+
 // Seeding
 using (var scope = app.Services.CreateScope())
 {
@@ -273,7 +316,6 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var trace = seeder.Seed(dbConnectionString)
-                          .WithLogging(msLogger)
                           .WithSpanName("SeedProductsFromFakeStore");
         var fin = trace.RunTraceableFin(CancellationToken.None).Run();
         fin.Match(

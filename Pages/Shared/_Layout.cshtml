@@ -14,10 +14,14 @@
 @using SmallShopBigAmbitions.Models
 @using System.Security.Claims
 @inject SmallShopBigAmbitions.FunctionalDispatcher.IFunctionalDispatcher Dispatcher
+@inject SmallShopBigAmbitions.Business.Services.UserService UserService
 @{
     var cartCount = 0;
     string userLabel = "Guest";
-    if (User?.Identity?.IsAuthenticated == true)
+
+    var (resolvedUserId, isAuth, _) = UserService.EnsureUserId(Context);
+
+    if (isAuth)
     {
         var isDummy = User.HasClaim(c => c.Type == "auth_kind" && c.Value == "dummy");
         var display = User.Claims.FirstOrDefault(c => c.Type == "display_name")?.Value
@@ -26,12 +30,12 @@
                        ?? "User";
         userLabel = isDummy ? $"{display} (Dummy)" : display;
     }
-    if (Context.Request.Cookies.TryGetValue("anon-id", out var raw) && Guid.TryParse(raw, out var userId))
+    if (resolvedUserId != Guid.Empty)
     {
         try
         {
             var fin = await Dispatcher
-                .Dispatch<GetCartForUserQuery, Cart>(new GetCartForUserQuery(userId), Context.RequestAborted)
+                .Dispatch<GetCartForUserQuery, Cart>(new GetCartForUserQuery(resolvedUserId), Context.RequestAborted)
                 .RunAsync();
             fin.Match(
                 Succ: cart => { cartCount = cart.Items.Count; return unit; },
@@ -51,6 +55,7 @@
                 <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
                     <ul class="navbar-nav flex-grow-1">
                         <li class="nav-item"><a class="nav-link text-dark" asp-page="/Index">Home</a></li>
+                        <li class="nav-item"><a class="nav-link text-dark" asp-page="/Demo">Demo</a></li>
                         <li class="nav-item"><a class="nav-link text-dark" asp-page="/Order">Order</a></li>
                         <li class="nav-item"><a class="nav-link text-dark" asp-page="/ViewReports">View Reports</a></li>
                         <li class="nav-item"><a class="nav-link text-dark" asp-page="/Privacy">Privacy</a></li>
@@ -59,12 +64,29 @@
                                 Cart @if (cartCount > 0){<span class="badge rounded-pill bg-primary ms-1" id="cart-count">@cartCount</span>}
                             </a>
                             <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 220px;" id="mini-cart-container">
-                                <div class="text-muted small">Loading...</div>
+                                @await Component.InvokeAsync("MiniCart")
                             </div>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-page="/Auth/Impersonate">@userLabel</a>
-                        </li>
+                        @if (isAuth)
+                        {
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="userMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">@userLabel</a>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+                                    <li><a class="dropdown-item" asp-page="/Auth/Impersonate">Impersonate</a></li>
+                                    <li><a class="dropdown-item" asp-page="/Dev/Claims">Claims</a></li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li>
+                                        <form method="post" asp-page="/Auth/Login" asp-page-handler="Logout" class="px-3 py-1">
+                                            <button type="submit" class="btn btn-link p-0">Logout</button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </li>
+                        }
+                        else
+                        {
+                            <li class="nav-item"><a class="nav-link text-dark" asp-page="/Auth/Login">Login</a></li>
+                        }
                     </ul>
                 </div>
             </div>
@@ -84,31 +106,6 @@
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        async function loadMiniCart() {
-            try {
-                const res = await fetch('/Cart?handler=Mini');
-                if (!res.ok) return;
-                const html = await res.text();
-                document.getElementById('mini-cart-container').innerHTML = html;
-            } catch { }
-        }
-        document.addEventListener('DOMContentLoaded', () => {
-            loadMiniCart();
-            document.body.addEventListener('submit', async e => {
-                const form = e.target;
-                if (form.matches('form[data-add-to-cart="true"]')) {
-                    e.preventDefault();
-                    const data = new FormData(form);
-                    const action = form.getAttribute('action') || window.location.pathname + '?handler=AddToCart';
-                    try {
-                        await fetch(action, { method: 'POST', body: data, headers: { 'X-Requested-With': 'Fetch' } });
-                        await loadMiniCart();
-                    } catch { }
-                }
-            });
-        });
-    </script>
     <script src="~/js/site.js" asp-append-version="true"></script>
 
     @await RenderSectionAsync("Scripts", required: false)

@@ -1,0 +1,20 @@
+@model SmallShopBigAmbitions.Models.Cart
+@if (Model.Items.Count == 0)
+{
+    <div class="text-muted small">Cart is empty.</div>
+}
+else
+{
+    <ul class="list-unstyled mb-2">
+        @foreach (var line in Model.Items.Lines)
+        {
+            <li class="small">
+                <strong>@line.Value.Quantity</strong> x @line.Value.UnitPrice.Amount @line.Value.UnitPrice.Currency
+            </li>
+        }
+    </ul>
+    <div class="fw-semibold small">
+        Total: @Model.Total("SEK").Amount SEK
+    </div>
+    <a asp-page="/Cart" class="btn btn-sm btn-primary mt-2 w-100">View cart</a>
+}

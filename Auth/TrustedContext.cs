@@ -14,7 +14,7 @@ public record TrustedContext
     public DateTimeOffset? ExpiresAt { get; init; } // exp
 
     // Optional scopes/permissions (from "scope" claim or roles)
-    public IReadOnlyCollection<string> Scopes { get; init; } = System.Array.Empty<string>();
+    public IReadOnlyCollection<string> Scopes { get; init; } = [];
 
     public static IO<Unit> RequireTrusted(TrustedContext context) =>
         IO.lift(() => AuthorizationGuards.EnsureTrusted(context));

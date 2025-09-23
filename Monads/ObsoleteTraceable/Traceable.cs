@@ -25,12 +25,12 @@ public record class Traceable<T>(
     }
 
 
-    public static Traceable<ResultOpt<string>> FromIOWrapped(IO<Fin<Option<string>>> io, string span, Func<Option<string>, IEnumerable<KeyValuePair<string, object>>>? attrs = null)
-        => new(() =>
-        {
-            var result = io.Run();
-            return new ResultOpt<string>(result);
-        }, span, result => attrs?.Invoke(result.Value.Match(Succ: x => x, Fail: _ => Option<string>.None)));
+    //public static Traceable<ResultOpt<string>> FromIOWrapped(IO<Fin<Option<string>>> io, string span, Func<Option<string>, IEnumerable<KeyValuePair<string, object>>>? attrs = null)
+    //    => new(() =>
+    //    {
+    //        var result = io.Run();
+    //        return new ResultOpt<string>(result);
+    //    }, span, result => attrs?.Invoke(result.Value.Match(Succ: x => x, Fail: _ => Option<string>.None)));
 
 
     /// Creates a new Traceable monad by applying a function that returns another Traceable monad.
@@ -67,6 +67,7 @@ public record class Traceable<T>(
     }
 }
 
+#pragma warning disable CS0618
 public static class TraceableExtensions
 {
     /// <summary>
@@ -84,3 +85,4 @@ public static class TraceableExtensions
             return result;
         }, traceable.SpanName, traceable.Attributes);
 }
+#pragma warning restore CS0618

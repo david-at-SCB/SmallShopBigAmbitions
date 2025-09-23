@@ -49,11 +49,9 @@ public interface IFunctionalDispatcher
         where TRequest : IFunctionalRequest<TResponse>;
 }
 
-public class FunctionalDispatcher : IFunctionalDispatcher
+public class FunctionalDispatcher(IServiceProvider provider) : IFunctionalDispatcher
 {
-    private readonly IServiceProvider _provider;
-
-    public FunctionalDispatcher(IServiceProvider provider) => _provider = provider;
+    private readonly IServiceProvider _provider = provider;
 
     // Existing (runtime-type) entry point kept for backwards compatibility
     [Obsolete("Use the strongly-typed generic Dispatch<TRequest, TResponse> method instead.")]
@@ -64,13 +62,13 @@ public class FunctionalDispatcher : IFunctionalDispatcher
 
         // Use reflection to call the strongly typed generic overload
         var method = typeof(FunctionalDispatcher)
-            .GetMethod(nameof(Dispatch), BindingFlags.Public | BindingFlags.Instance, new[] { requestType, typeof(CancellationToken) });
+            .GetMethod(nameof(Dispatch), BindingFlags.Public | BindingFlags.Instance, [requestType, typeof(CancellationToken)]);
 
         if (method is null || !method.IsGenericMethodDefinition)
             return IO.lift<Fin<TResponse>>(() => Fin<TResponse>.Fail(Error.New("Dispatch method resolution failure")));
 
         var generic = method.MakeGenericMethod(requestType, typeof(TResponse));
-        return (IO<Fin<TResponse>>)generic.Invoke(this, new object[] { request, ct })!;
+        return (IO<Fin<TResponse>>)generic.Invoke(this, [request, ct])!;
     }
 
     // Preferred strongly-typed generic API

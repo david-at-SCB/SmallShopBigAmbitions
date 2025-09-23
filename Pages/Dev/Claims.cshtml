@@ -1,0 +1,43 @@
+@page
+@model SmallShopBigAmbitions.Pages.Dev.ClaimsModel
+@{
+    ViewData["Title"] = "Claims (Dev)";
+}
+<h1>Claims (Development)</h1>
+<p class="text-muted">Shows the current HttpContext.User claims. Use the button to force Negotiate + AD group transformation.</p>
+<form method="post" asp-page-handler="ForceTransform" class="mb-3">
+    <button type="submit" class="btn btn-primary">Force Negotiate + Transform</button>
+</form>
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="alert alert-info">@Model.Message</div>
+}
+<div class="card mb-3">
+    <div class="card-body">
+        <dl class="row small mb-0">
+            <dt class="col-sm-3">Auth Type</dt><dd class="col-sm-9">@Model.AuthType</dd>
+            <dt class="col-sm-3">Is Authenticated</dt><dd class="col-sm-9">@Model.IsAuthenticated</dd>
+            <dt class="col-sm-3">Name</dt><dd class="col-sm-9">@Model.Name</dd>
+            <dt class="col-sm-3">Identities</dt><dd class="col-sm-9">@Model.IdentityCount</dd>
+            <dt class="col-sm-3">Total Claims</dt><dd class="col-sm-9">@Model.Claims.Count</dd>
+        </dl>
+    </div>
+</div>
+<table class="table table-sm table-striped">
+    <thead>
+        <tr>
+            <th>Type</th>
+            <th>Value</th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var c in Model.Claims)
+    {
+        <tr>
+            <td class="text-monospace">@c.Type</td>
+            <td>@c.Value</td>
+        </tr>
+    }
+    </tbody>
+</table>
+<p class="small text-muted">After forcing transform, a claim 'ad_transform' with value '1' should appear if the transformer ran.</p>

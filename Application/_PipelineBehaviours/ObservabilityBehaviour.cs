@@ -1,7 +1,6 @@
 ﻿namespace SmallShopBigAmbitions.Application._PipelineBehaviours;
 
 using LanguageExt;
-using LanguageExt.Common;
 using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Monads;
@@ -25,7 +24,8 @@ public sealed class ObservabilityBehavior<TRequest, TResponse>(
         var enricher = request as ITraceEnrichment;
         var spanName = enricher?.GetSpanName() ?? reqType;
 
-        // 1) Build an IO that *acquires* the span and returns an IDisposable
+        // 1) Build an IO that *acquires* a span when evaluated,
+        //    returning an IDisposable that ends the span.
         IO<IDisposable> openSpan =
             IO<IDisposable>.Lift(() =>
             {
@@ -34,13 +34,13 @@ public sealed class ObservabilityBehavior<TRequest, TResponse>(
                 span?.SetTag("user.id", context.CallerId);
 
                 if (enricher is not null)
-                    foreach (var (k, v) in enricher.GetTraceAttributes())
-                        span?.SetTag(k, v);
+                    foreach (var (key, value) in enricher.GetTraceAttributes())
+                        span?.SetTag(key, value);
 
                 return new SpanScope(span);
             });
 
-        // 2) Compose: when evaluated, open the span, run next, log via taps, then dispose
+        // 2) Compose: when evaluated, open the span, run next, log via taps, then add result attrs, then dispose
         return openSpan.Bind(spanDisp =>
             next(request, context, ct)
                 .TapSucc(_ => log.LogInformation("Handled {RequestType} for {CallerId}", reqType, context.CallerId))
@@ -52,15 +52,22 @@ public sealed class ObservabilityBehavior<TRequest, TResponse>(
                 })
                 .Map(res =>
                 {
+                    // Post-execution enrichment (result-based)
+                    if (request is ITraceResultEnrichment<TResponse> post)
+                    {
+                        foreach (var (k, v) in post.GetResultAttributes(res))
+                            Activity.Current?.SetTag(k, v);
+                    }
                     spanDisp.Dispose();
                     return res;
                 })
         );
     }
-    private sealed class SpanScope : IDisposable
+
+    private sealed class SpanScope(Activity? activity) : IDisposable
     {
-        private readonly Activity? _activity;
-        public SpanScope(Activity? activity) => _activity = activity;
+        private readonly Activity? _activity = activity;
+
         public void Dispose() => _activity?.Dispose();
     }
 }
@@ -72,4 +79,10 @@ public interface ITraceEnrichment
 
     // Key–value attributes to attach to the span started by the behavior
     IEnumerable<(string Key, object? Value)> GetTraceAttributes();
+}
+
+// New: optional result-stage enrichment
+public interface ITraceResultEnrichment<TResponse> : ITraceEnrichment
+{
+    IEnumerable<(string Key, object? Value)> GetResultAttributes(Fin<TResponse> result);
 }

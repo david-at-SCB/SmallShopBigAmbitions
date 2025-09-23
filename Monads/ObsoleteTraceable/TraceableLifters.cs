@@ -186,7 +186,7 @@ public static class TraceableLifts
         );
     }
 
-
+#pragma warning disable CS8603
     public static Traceable<ResultOpt<T>> FromIO<T>(
         IO<Fin<Option<T>>> io,
         string span,
@@ -198,4 +198,5 @@ public static class TraceableLifts
             return new ResultOpt<T>(result);
         }, span, result => attrs?.Invoke(result.Value.Match(Succ: x => x, Fail: _ => Option<T>.None)));
 }
+#pragma warning restore CS8603
 

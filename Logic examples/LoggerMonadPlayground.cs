@@ -37,7 +37,7 @@ namespace LoggerMonadPlayground
         public List<string> Logs { get; }
         public ILogStrategy Strategy { get; }
 
-        public Logger(T value, ILogStrategy strategy, List<string> logs = null)
+        public Logger(T value, ILogStrategy strategy, List<string> logs = null!)
         {
             Value = value;
             Strategy = strategy;
@@ -47,8 +47,8 @@ namespace LoggerMonadPlayground
         public IMonad<U> Bind<U>(Func<T, IMonad<U>> func)
         {
             var result = func(Value) as Logger<U>;
-            var combinedLogs = Logs.Concat(result.Logs).ToList();
-            return new Logger<U>(result.Value, Strategy, combinedLogs);
+            var combinedLogs = Logs.Concat(result?.Logs ?? []).ToList();
+            return new Logger<U>(result!.Value, Strategy, combinedLogs);
         }
 
         public Logger<T> Log(string message)
@@ -87,7 +87,7 @@ namespace LoggerMonadPlayground
     // Main program
     class Program
     {
-        static async Task Main(string[] args)
+        static void RunExample()
         {
             var customerService = new CustomerService();
             var productService = new ProductService();

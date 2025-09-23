@@ -11,10 +11,14 @@ public static class ShopActivitySource
 
 public static class Telemetry
 {
-    public static readonly ActivitySource BillingSource = new("Service.Billing");
-    public static readonly ActivitySource CartSource = new("Service.Cart");
-    public static readonly ActivitySource OrderSource = new("Service.Order");
-    public static readonly ActivitySource MediatorSource = new("Service.Mediator");
+    public static readonly ActivitySource BillingServiceSource = new("Service.Billing");
+    public static readonly ActivitySource CartServiceSource = new("Service.Cart");
+    public static readonly ActivitySource OrderServiceSource = new("Service.Order");
+    public static readonly ActivitySource MediatorServiceSource = new("Service.Mediator");
+    public static readonly ActivitySource UserServiceSource = new("Service.User");
+    public static readonly ActivitySource SiteWideServiceSource = new(SiteWideActivitySourceName);
+
+    public const string SiteWideActivitySourceName = "SmallShopBigAmbitions";
 }
 
 

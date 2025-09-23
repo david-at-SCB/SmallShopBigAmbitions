@@ -7,9 +7,11 @@ namespace SmallShopBigAmbitions.Application._Abstractions;
 
 public enum PaymentMethod
 {
-    Card,
-    Swish,
-    PayPal
+    Unknown = 0, // sentinel value for validator
+    Card = 1,
+    Swish = 2,
+    PayPal = 3,
+    Invoice = 4,
     // ...
 }
 

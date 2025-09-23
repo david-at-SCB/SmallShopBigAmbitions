@@ -19,10 +19,12 @@ public class ProductsModel : PageModel
 {
     private readonly ProductService _productService;
     private readonly IFunctionalDispatcher _dispatcher;
-    public ProductsModel(ProductService products, IFunctionalDispatcher dispatcher)
+    private readonly UserService _userService;
+    public ProductsModel(ProductService products, IFunctionalDispatcher dispatcher, UserService userService)
     {
         _productService = products;
         _dispatcher = dispatcher;
+        _userService = userService;
     }
 
     public List<FakeStoreProduct> Products { get; private set; } = [];
@@ -43,8 +45,9 @@ public class ProductsModel : PageModel
         var resultFin = await qtyFin.Match(
             Succ: async q =>
             {
+                var (userId, _, _) = _userService.EnsureUserId(HttpContext);
                 var cmd = new AddItemToCartCommand(
-                    UserId: EnsureUserId(),
+                    UserId: userId,
                     Product: new ExternalProductRef(id),
                     Quantity: q,
                     PriceRef: new Money(currency, price),
@@ -61,27 +64,5 @@ public class ProductsModel : PageModel
                 $"Add failed: {e.Message}");
 
         return RedirectToPage();
-    }
-
-    private Guid EnsureUserId()
-    {
-        if (User?.Identity?.IsAuthenticated == true)
-        {
-            var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            if (Guid.TryParse(idClaim, out var gid)) return gid;
-        }
-        const string CookieName = "anon-id";
-        if (Request.Cookies.TryGetValue(CookieName, out var raw) && Guid.TryParse(raw, out var g))
-            return g;
-        var id = Guid.NewGuid();
-        Response.Cookies.Append(CookieName, id.ToString(), new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.Lax,
-            IsEssential = true,
-            Expires = DateTimeOffset.UtcNow.AddYears(1)
-        });
-        return id;
     }
 }

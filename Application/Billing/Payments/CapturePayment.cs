@@ -21,8 +21,7 @@ public interface IPaymentCaptureService
 }
 
 public sealed class CapturePaymentHandler(
-    IPaymentCaptureService capture,
-    ILogger<CapturePaymentHandler> logger
+    IPaymentCaptureService capture
 ) : IFunctionalHandler<CapturePaymentCommand, Unit>
 {
     private readonly IPaymentCaptureService _capture = capture;

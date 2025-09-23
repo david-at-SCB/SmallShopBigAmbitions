@@ -20,13 +20,20 @@ public class AddItemToCartHandler(
     private readonly ProductService _productService = productService;
     private readonly ICartPersistence _persistence = cartPersistence;
 
+    // NOTE: For development we allow anonymous (cookie-based) callers to persist carts.
+    // We only reject if we truly have no caller identifier at all.
+    private static Fin<Unit> EnsureCaller(TrustedContext ctx) =>
+        ctx.CallerId == Guid.Empty
+            ? Fin<Unit>.Fail(Error.New("cart.add.missing_caller"))
+            : Fin<Unit>.Succ(Unit.Default);
+
     public IO<Fin<AddItemToCartResult>> Handle_pyramid(AddItemToCartCommand request, TrustedContext context, CancellationToken ct)
     {
         var now = DateTime.UtcNow;
 
-        // Anonymous users: do not persist; return special error code (UI can show prompt)
-        if (!context.IsAuthenticated)
-            return IO.lift<Fin<AddItemToCartResult>>(() => Fin<AddItemToCartResult>.Fail(Error.New("cart.add.anonymous_not_persisted")));
+        var callerCheck = EnsureCaller(context);
+        if (callerCheck.IsFail)
+            return IO.lift<Fin<AddItemToCartResult>>(() => Fin<AddItemToCartResult>.Fail((Error)callerCheck));
 
         // FLOW (TraceableT<Fin<AddItemToCartResult>>):
         // Cart -> Policy -> Product -> Persist -> Result
@@ -41,7 +48,6 @@ public class AddItemToCartHandler(
                                 .GetProductById(request.Product.ApiProductId, ct)
                                 .BindFin(productDto =>
                                 {
-                                    // Price snapshot: honor requested currency but use CURRENT amount from product service.
                                     var priceSnapshot = new Money(request.PriceRef.Currency, productDto.Price);
                                     var internalPid = ProductIdMapper.ToInternal(productDto.Id);
 
@@ -66,7 +72,8 @@ public class AddItemToCartHandler(
                                 })
                         )
                 )
-                .WithSpanName("cart.add_item.flow");
+                .WithSpanName("cart.add_item.flow")
+                .WithAttributes(("auth.mode", context.IsAuthenticated ? "authenticated" : "anon"));
 
         return flow.RunTraceable(ct);
     }
@@ -75,12 +82,10 @@ public class AddItemToCartHandler(
     {
         var now = DateTime.UtcNow;
 
-        // Anonymous users: do not persist; return special error code (UI can show prompt)
-        if (!context.IsAuthenticated)
-            return IO.lift<Fin<AddItemToCartResult>>(() => Fin<AddItemToCartResult>.Fail(Error.New("cart.add.anonymous_not_persisted")));
+        var callerCheck = EnsureCaller(context);
+        if (callerCheck.IsFail)
+            return IO.lift<Fin<AddItemToCartResult>>(() => Fin<AddItemToCartResult>.Fail((Error)callerCheck));
 
-        // FLOW (TraceableT<Fin<AddItemToCartResult>>):
-        // Cart -> Policy -> Product -> Persist -> Result
         var flow =
             from cart in (TraceableT<Fin<Models.Cart>>)_cartService.GetCartForUser(request.UserId)
             from _ in AddItemToCartPolicy.Evaluate(request, context, cart.Items.Count)
@@ -90,7 +95,6 @@ public class AddItemToCartHandler(
             from cartSnap in TraceableTLifts.FromIOFin(
                 _persistence.AddLine(cart.Id, request.UserId, internalPid.Value, request.Quantity.Value, priceSnapshot),
             spanName: "cart.persist.add_line")
-
             select new AddItemToCartResult(
                 UserId: request.UserId,
                 APIProductId: request.Product.ApiProductId,
@@ -103,6 +107,7 @@ public class AddItemToCartHandler(
 
         return flow
             .WithSpanName("cart.add_item.flow")
+            .WithAttributes(("auth.mode", context.IsAuthenticated ? "authenticated" : "anon"))
             .RunTraceable(ct);
     }
 }

@@ -6,6 +6,8 @@
 // - Use Fin/Option for errors; handle via Match in handlers and return proper IActionResult.
 // - Keep heavy work in services; pages should be thin adapters.
 // - Pass CancellationToken from handler to service.
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using SmallShopBigAmbitions.Application.Cart.GetCartForUser;
@@ -17,37 +19,85 @@ using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
 using SmallShopBigAmbitions.TracingSources;
 using System.Diagnostics;
+using static LanguageExt.Prelude;
+
+// Added for on-prem AD bootstrap auth
+using System.Security.Claims;
+using SmallShopBigAmbitions.Auth;
+using SmallShopBigAmbitions.Business.Services;
 
 namespace SmallShopBigAmbitions.Pages;
 
 public class IndexModel : PageModel
 {
-    private readonly IFunctionalDispatcher _dispatcher;
     private readonly ActivitySource _activitySource = ShopActivitySource.Instance;
+    private readonly IClaimsTransformation? _claimsTransformation;
+    private readonly IFunctionalDispatcher _dispatcher;
+    private readonly IDummyUserStore _dummyUsers;
 
-    public IndexModel(IFunctionalDispatcher dispatcher)
+    // optional injection
+    private readonly UserService _userService;
+     // inline login support
+
+    public IndexModel(IFunctionalDispatcher dispatcher, UserService userService, IDummyUserStore dummyUsers, IClaimsTransformation? claimsTransformation = null)
     {
         _dispatcher = dispatcher;
+        _userService = userService;
+        _dummyUsers = dummyUsers;
+        _claimsTransformation = claimsTransformation;
     }
 
-    public Option<Fin<Cart>> Cart { get; private set; }
-
     public Option<Fin<AddItemToCartResult>> AddItemResult { get; private set; }
+    public Option<Fin<Cart>> Cart { get; private set; }
+    [BindProperty] public string? HelloResult { get; set; }
+    // Inline login fields (dev)
+    [BindProperty] public string? LoginEmail { get; set; }
 
-    [BindProperty]
-    public string? HelloResult { get; set; }
-
-    [BindProperty]
-    public string ResultMessage { get; private set; }
-
-    [BindProperty]
-    public Guid UserId { get; set; }
-
+    [BindProperty] public string? LoginMessage { get; set; }
+    [BindProperty] public string? LoginPassword { get; set; }
+    [BindProperty] public string ResultMessage { get; private set; }
+    [BindProperty] public Guid UserId { get; set; }
     public async Task OnGetAsync(Guid? userId, CancellationToken ct)
     {
-        if (userId.HasValue)
+        // --- Auto Negotiate attempt (moved from middleware) ---
+        // If no authenticated user yet, try Windows (Negotiate) *once* here.
+        if (!(User?.Identity?.IsAuthenticated ?? false))
         {
-            var result = await _dispatcher.Dispatch<GetCartForUserQuery, Cart>(new GetCartForUserQuery(userId.Value), ct).RunAsync();
+            var authResult = await HttpContext.AuthenticateAsync(NegotiateDefaults.AuthenticationScheme);
+            if (authResult.Succeeded && authResult.Principal is not null)
+            {
+                // ClaimsTransformation already ran (IClaimsTransformation is invoked by AuthenticateAsync)
+                // Add a display_name claim if missing (defensive; transformer already does this)
+                var id = authResult.Principal.Identities.FirstOrDefault();
+                if (id is not null && !id.HasClaim(c => c.Type == "display_name"))
+                {
+                    var dn = id.Name ?? authResult.Principal.Identity?.Name;
+                    if (!string.IsNullOrWhiteSpace(dn))
+                        id.AddClaim(new Claim("display_name", dn));
+                }
+
+                // Sign in under existing default cookie (DummyAuth) so the rest of the pipeline treats this as authenticated.
+                await HttpContext.SignInAsync("DummyAuth", authResult.Principal, new AuthenticationProperties
+                {
+                    IsPersistent = false
+                });
+
+                // Update current request principal so layout shows it immediately.
+                HttpContext.User = authResult.Principal;
+            }
+        }
+        // --- End auto Negotiate attempt ---
+
+        // Always ensure we have a stable UserId for the page (claim or anon cookie)
+        UserId = _userService.EnsureUserId(HttpContext).userId;
+
+        var fetchId = userId ?? UserId;
+        if (fetchId != Guid.Empty)
+        {
+            var result = await _dispatcher
+                .Dispatch<GetCartForUserQuery, Cart>(new GetCartForUserQuery(fetchId), ct)
+                .RunAsync();
+
             Cart = result.Match(
                 Succ: cart => Option<Fin<Cart>>.Some(cart),
                 Fail: err => Option<Fin<Cart>>.Some(Fin<Cart>.Fail(err))
@@ -59,44 +109,29 @@ public class IndexModel : PageModel
         }
     }
 
-    // Demo handler: add a fixed product (id=1) with quantity 1 to the user's cart.
-    public async Task<IActionResult> OnPostAddItemsAndCheckoutAsync(CancellationToken ct)
+    public async Task<IActionResult> OnPostGoToProducts()
     {
-        var callerId = Guid.NewGuid();
-        var userId = UserId != Guid.Empty ? UserId : callerId;
-
-        var qtyFin = Quantity.Create(1);
-        if (qtyFin.IsFail)
-        {
-            var err = qtyFin.Match(Succ: _ => Error.New("unreachable"), Fail: e => e);
-            ModelState.AddModelError(string.Empty, err.Message);
-            AddItemResult = Option<Fin<AddItemToCartResult>>.Some(Fin<AddItemToCartResult>.Fail(err));
-            return Page();
-        }
-
-        var qtyVal = qtyFin.Match(Succ: q => q, Fail: _ => default);
-
-        var cmd = new AddItemToCartCommand(
-            userId,
-            new ExternalProductRef(1),
-            qtyVal,
-            PriceRef: new("SEK", 150),
-            Source: "index.page");
-
-        var result = await _dispatcher.Dispatch<AddItemToCartCommand, AddItemToCartResult>(cmd, ct).RunAsync();
-
-        AddItemResult = result.Match(
-            Succ: r => Option<Fin<AddItemToCartResult>>.Some(r),
-            Fail: err => Option<Fin<AddItemToCartResult>>.Some(Fin<AddItemToCartResult>.Fail(err))
-        );
-
-        return Page();
+        await Task.Delay(199); // simulate some async work
+        return RedirectToPage("/Products");
     }
 
     public async Task<IActionResult> OnPostRunExampleAsync()
     {
-        var result = TraceableIOLoggerExample.RunExample();
+        var taskResult = Task.FromResult(TraceableIOLoggerExample.RunExample());
+        var result = await taskResult;
         ResultMessage = result;
+        return Page();
+    }
+
+    public async Task<IActionResult> OnGetRunTestSpanAsync()
+    {
+        using var activity = Telemetry.SiteWideServiceSource.StartActivity("test-span");
+
+        if (activity != null)
+        {
+            activity.SetTag("custom.tag", "test-value");
+            await Task.Delay(500); // simulate work
+        }
         return Page();
     }
 
@@ -123,10 +158,5 @@ public class IndexModel : PageModel
         );
 
         return Page();
-    }
-
-    public async Task<IActionResult> OnPostGoToProducts()
-    {
-        return RedirectToPage("/Products");
     }
 }

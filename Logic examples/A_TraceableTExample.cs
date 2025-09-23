@@ -90,7 +90,7 @@ public static class C_ALittleMoreComplexTraceableTExample
 
 public class A_TraceableTExample
 {
-    public static void Main()
+    public static void RunExample()
     {
         // Instantiate a normal logger instance using LoggerFactory
         var logger = LoggerFactory.Create(builder =>

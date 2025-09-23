@@ -24,7 +24,6 @@ public static class IoFinTapExtensions
         });
 
     // ---------- IO-based taps (compose additional IO effects) ----------
-
     public static IO<Fin<T>> TapSucc<T>(this IO<Fin<T>> io, Func<T, IO<Unit>> onSucc) =>
         io.Bind(fin =>
             fin.Match(
@@ -32,10 +31,10 @@ public static class IoFinTapExtensions
                 Fail: _ => IO<Fin<T>>.Lift(() => fin)));
 
     public static IO<Fin<T>> TapFail<T>(this IO<Fin<T>> io, Func<Error, IO<Unit>> onFail) =>
-        io.Bind(fin =>
-            fin.Match(
-                Succ: _ => IO<Fin<T>>.Lift(() => fin),
-                Fail: e => onFail(e).Map(_ => fin)));
+    io.Bind(fin =>
+        fin.Match(
+            Succ: _ => IO<Fin<T>>.Lift(() => fin),
+            Fail: e => onFail(e).Map(_ => fin)));
 
     // ---------- Optional: direct Fin<T> variants ----------
 

@@ -57,6 +57,7 @@ public sealed class CreateIntentToPayHandler(
     /// </summary>
     public IO<Fin<IntentToPayDto>> Handle(IntentToPayCommand request, TrustedContext context, CancellationToken ct)
     {
+
         // PRE: auth -> policy -> totals (pure-ish work)
         var pre =
             RequireTrustedT(context)

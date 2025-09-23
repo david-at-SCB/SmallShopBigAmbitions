@@ -3,6 +3,7 @@ using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
+using SmallShopBigAmbitions.Monads.TraceableTransformer.Extensions.BaseLinq;
 
 namespace SmallShopBigAmbitions.Application.Billing.CheckoutUser;
 

@@ -12,8 +12,10 @@ public class OldLogger<T>(T value, ILogStrategy strategy, List<string> logs = nu
     public IMonad<U> Bind<U>(Func<T, IMonad<U>> func)
     {
         var result = func(Value) as OldLogger<U>;
-        var combinedLogs = Logs.Concat(result.Logs).ToList();
-        return new OldLogger<U>(result.Value, Strategy, combinedLogs);
+        var combinedLogs = Logs.Concat(result?.Logs ?? []).ToList();
+        // Fix: Ensure value is not null for non-nullable U
+        U value = result != null ? result.Value : default!;
+        return new OldLogger<U>(value, Strategy, combinedLogs);
     }
 
     public OldLogger<T> Log(string message)

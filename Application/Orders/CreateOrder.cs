@@ -7,6 +7,7 @@ using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
+using SmallShopBigAmbitions.Monads.TraceableTransformer.Extensions.BaseLinq;
 using static LanguageExt.Prelude;
 
 public sealed record CreateOrderCommand(Guid CartId, Guid UserId, string Currency, string? IdempotencyKey = null)
