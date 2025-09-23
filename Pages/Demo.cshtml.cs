@@ -89,7 +89,7 @@ public class DemoModel : PageModel
         UserId = _userService.EnsureUserId(HttpContext).userId;
         var qFin = Quantity.Create(1);
         var cmd = qFin.IsSucc
-            ? new AddItemToCartCommand(UserId, new SmallShopBigAmbitions.Models.ExternalProductRef(1), qFin.Match(q => q, _ => default), new Money("SEK", 150), "demo.page")
+            ? new AddItemToCartCommand(UserId, new ExternalProductRef(1, CatalogProvider.FakeStore), qFin.Match(q => q, _ => default), new Money("SEK", 150), "demo.page")
             : null;
         if (cmd is null)
         {

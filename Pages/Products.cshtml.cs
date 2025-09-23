@@ -12,6 +12,7 @@ using SmallShopBigAmbitions.Business.Services;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Application.Carts.AddItemToCart;
+using SmallShopBigAmbitions.Application._Abstractions;
 
 namespace SmallShopBigAmbitions.Pages;
 
@@ -48,7 +49,7 @@ public class ProductsModel : PageModel
                 var (userId, _, _) = _userService.EnsureUserId(HttpContext);
                 var cmd = new AddItemToCartCommand(
                     UserId: userId,
-                    Product: new ExternalProductRef(id),
+                    Product: new ExternalProductRef(id, CatalogProvider.FakeStore),
                     Quantity: q,
                     PriceRef: new Money(currency, price),
                     Source: "ui.products.list");

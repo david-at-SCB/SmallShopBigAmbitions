@@ -13,6 +13,7 @@ using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Models.Mappers.ProductAPIToProductBusiness;
 using SmallShopBigAmbitions.FunctionalDispatcher;
 using SmallShopBigAmbitions.Application.Carts.AddItemToCart;
+using SmallShopBigAmbitions.Application._Abstractions;
 
 namespace SmallShopBigAmbitions.Pages;
 
@@ -77,7 +78,7 @@ public class ProductDetailsModel : PageModel
                 var currency = "SEK";
                 var cmd = new AddItemToCartCommand(
                     UserId: EnsureUserId(),
-                    Product: new ExternalProductRef(dto.Id),
+                    Product: new ExternalProductRef(dto.Id, CatalogProvider.FakeStore),
                     Quantity: qtyObj,
                     PriceRef: new Money(currency, dto.Price),
                     Source: "ui.product.details");
