@@ -19,7 +19,7 @@ public abstract class TraceablePageModelBase(IFunctionalDispatcher dispatcher, A
         CancellationToken ct = default
     ) where TRequest : IFunctionalRequest<TResponse>
     {
-        var dispatchIO = Dispatcher.Dispatch<TResponse>(request, ct);
+        var dispatchIO = Dispatcher.Dispatch<TRequest,TResponse>(request, ct);
         return TraceableTLifts.FromIO<Fin<TResponse>>(dispatchIO, spanName);
     }
 
