@@ -27,7 +27,7 @@ public class CartModel : PageModel
         {
             var fin = await _dispatcher.Dispatch<GetCartForUserQuery, Cart>(new GetCartForUserQuery(userId), ct).RunAsync();
             _ = fin.Match(
-                  Succ: c => { Cart = c; Subtotal = c.Total("SEK"); return unit; },
+                  Succ: c => { Cart = c; Subtotal = c.GetTotal(); return unit; },
                   Fail: _ => unit);
         }
     }

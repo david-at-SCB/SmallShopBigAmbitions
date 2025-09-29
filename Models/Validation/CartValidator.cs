@@ -30,11 +30,17 @@ public static class CartValidator
             ? Success<Seq<Error>, Unit>(unit)
             : Fail<Seq<Error>, Unit>(Prelude.Seq(Error.New("Total cart amount must be greater than zero")));
 
+    public static Validation<Seq<Error>, Unit> HasCurrency(Cart cart) =>
+        cart.Currency.IsSome
+            ? Success<Seq<Error>, Unit>(unit)
+            : Fail<Seq<Error>, Unit>(Prelude.Seq(Error.New("Cart currency is not set")));
+
     /// <summary>
     /// Aggregate all validations and accumulate all failures using Applicative Apply.
     /// </summary>
     public static Validation<Seq<Error>, Unit> ValidateForCharge(Cart cart) =>
-        Success<Seq<Error>, System.Func<Unit, System.Func<Unit, System.Func<Unit, System.Func<Unit, Unit>>>>>(_ => __ => ___ => ____ => unit)
+        Success<Seq<Error>, System.Func<Unit, System.Func<Unit, System.Func<Unit, System.Func<Unit, System.Func<Unit, Unit>>>>>>(_ => __ => ___ => ____ => _____ => unit)
+            .Apply(HasCurrency(cart))
             .Apply(NonEmpty(cart))
             .Apply(AllQuantitiesPositive(cart))
             .Apply(AllPricesPositive(cart))

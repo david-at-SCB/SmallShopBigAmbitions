@@ -8,14 +8,9 @@ using SmallShopBigAmbitions.Monads.TraceableTransformer.Extensions.BaseLinq;
 
 namespace SmallShopBigAmbitions.Application.Carts.GetCartForUser;
 
-public class GetCartForUserHandler : IFunctionalHandler<GetCartForUserQuery, Models.Cart>
+public class GetCartForUserHandler(CartService cartService) : IFunctionalHandler<GetCartForUserQuery, Models.Cart>
 {
-    private readonly CartService _cartService;
-
-    public GetCartForUserHandler(CartService cartService)
-    {
-        _cartService = cartService;
-    }
+    private readonly CartService _cartService = cartService;
 
     public IO<Fin<Models.Cart>> Handle(GetCartForUserQuery request, TrustedContext context, CancellationToken ct)
     {

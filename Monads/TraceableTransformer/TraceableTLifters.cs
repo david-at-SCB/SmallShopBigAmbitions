@@ -85,7 +85,13 @@ public static class TraceableTLifts
             spanName,
             attributes
         );
-
+    /// <summary>
+    /// Lifts a value into an IO, and uses that IO as the effect to trace.
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="value"></param>
+    /// <param name="spanName"></param>
+    /// <returns></returns>
     public static TraceableT<T> FromValue<T>(T value, string spanName) =>
         new(IO.lift(() => value), spanName);
 

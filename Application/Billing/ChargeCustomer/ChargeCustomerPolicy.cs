@@ -11,7 +11,7 @@ public static class ChargeCustomerValidator
 {
     public static Validation<Seq<Error>, Unit> Validate(ChargeCustomerCommand cmd, TrustedContext ctx)
     {
-        var cartValidation = cmd.Cart.ValidateForCharge().Match(
+        var cartValidation = cmd.Cart.ValidateForCharge(cmd.UserId).Match(
             Succ: _ => Success<Seq<Error>, Unit>(unit),
             Fail: e => Fail<Seq<Error>, Unit>(Seq(e)));
 

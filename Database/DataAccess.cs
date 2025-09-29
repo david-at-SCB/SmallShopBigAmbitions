@@ -21,6 +21,7 @@ public interface IDataAccess
     TraceableT<Fin<PaymentIntent>> InsertPaymentIntent(PaymentIntent intent);
     TraceableT<Fin<Customer>> GetCustomerById(Guid userId);
     TraceableT<Fin<Cart>> GetCustomerCart(Guid userId);
+    TraceableT<Fin<CartSnapshot>> GetCustomerCartSnapshot(Guid userId); // new snapshot variant
 }
 
 public sealed class DataAccess(string connectionString) : IDataAccess
@@ -124,72 +125,99 @@ public sealed class DataAccess(string connectionString) : IDataAccess
         });
 
     public TraceableT<Fin<Customer>> GetCustomerById(Guid userId) =>
-        TraceFin("db.customer.get_by_id", () => FinSucc(new Customer(userId, "Unknown", "unknown@example.com")));
+        TraceFin("db.customer.get_by_id", () => FinSucc(new Customer(new RegisteredCustomerId(userId), "Unknown", "unknown@example.com")));
 
     public TraceableT<Fin<Cart>> GetCustomerCart(Guid userId) =>
-        TraceFin("db.cart.get_by_user", () =>
-        {
-            try
-            {
-                if (userId == Guid.Empty)
-                    return Fin<Cart>.Fail(Error.New("Cannot create a Cart for non-existent customer"));
-
-                using var conn = new SqliteConnection(_env.ConnectionString);
-                conn.Open();
-                // Ensure cart row exists
-                using (var ensure = conn.CreateCommand())
-                {
-                    ensure.CommandText = "INSERT INTO Carts (Id, UserId) SELECT @Id,@U WHERE NOT EXISTS (SELECT 1 FROM Carts WHERE UserId=@U) RETURNING Id";
-                    ensure.Parameters.AddWithValue("@Id", Guid.NewGuid().ToString());
-                    ensure.Parameters.AddWithValue("@U", userId.ToString());
-                    // Some SQLite versions don't support RETURNING; ignore result.
-                    try { ensure.ExecuteNonQuery(); } catch { }
-                }
-
-                // Fetch existing cart id
-                Guid cartId;
-                using (var sel = conn.CreateCommand())
-                {
-                    sel.CommandText = "SELECT Id FROM Carts WHERE UserId=@U LIMIT 1";
-                    sel.Parameters.AddWithValue("@U", userId.ToString());
-                    var cid = sel.ExecuteScalar()?.ToString();
-                    cartId = cid != null ? Guid.Parse(cid) : Guid.NewGuid();
-                }
-
-                // Load lines
-                var items = new LanguageExt.HashMap<ProductId, CartLine>();
-                using (var lines = conn.CreateCommand())
-                {
-                    lines.CommandText = "SELECT ProductId, Quantity, UnitPrice, Currency FROM CartLines WHERE CartId=@C";
-                    lines.Parameters.AddWithValue("@C", cartId.ToString());
-                    using var rdr = lines.ExecuteReader();
-                    while (rdr.Read())
-                    {
-                        var pid = new ProductId(Guid.Parse(rdr.GetString(0)));
-                        var qty = rdr.GetInt32(1);
-                        var unitPrice = rdr.GetDecimal(2);
-                        var currency = rdr.GetString(3);
-                        items = items.Add(pid, new CartLine(pid, qty, new Money(currency, unitPrice)));
-                    }
-                }
-
-                var cartItems = new CartItems(items);
-                return FinSucc(new Cart(cartId, userId, cartItems));
-            }
-            catch (Exception ex)
-            {
-                return Fin<Cart>.Fail(Error.New(ex));
-            }
-        }, fin => fin.Match(
-            Succ: c => new[]
+        TraceFin("db.cart.get_by_user", () => LoadCart(userId).Map(r => r.Cart), fin => fin.Match(
+            Succ: cart => new[]
             {
                 new KeyValuePair<string, object>("user.id", userId),
-                new KeyValuePair<string, object>("cart.item.count", c.Items.Count)
+                new KeyValuePair<string, object>("cart.item.count", cart.Items.Count),
+                new KeyValuePair<string, object>("cart.valid.total", cart.ValidTotal())
+            },
+            Fail: e => new[] { new KeyValuePair<string, object>("error", e.Message) }
+        ));
+
+    public TraceableT<Fin<CartSnapshot>> GetCustomerCartSnapshot(Guid userId) =>
+        TraceFin("db.cart.get_snapshot", () => LoadCart(userId).Bind(tuple =>
+        {
+            var (cart, currencyOpt, _) = tuple;
+            var snapshot = new CartSnapshot(
+                cart,
+                new RegisteredCustomerId(userId),
+                cart.GetTotal(),
+                "SE",
+                "NA",
+                false,
+                System.Array.Empty<string>());
+            var enriched = CartSnapshotFactory.Enrich(snapshot);
+            return FinSucc(enriched);
+        }), fin => fin.Match(
+            Succ: snap => new[]
+            {
+                new KeyValuePair<string, object>("user.id", userId),
+                new KeyValuePair<string, object>("cart.items", snap.GetItemsAmount()),
+                new KeyValuePair<string, object>("cart.valid", snap.Valid)
             },
             Fail: e => new[] { new KeyValuePair<string, object>("error", e.Message) }
         ));
 
     // ----------------- Helpers -----------------
+    private Fin<(Cart Cart, Option<string> Currency, HashMap<ProductId, CartLine> Lines)> LoadCart(Guid userId)
+    {
+        try
+        {
+            if (userId == Guid.Empty)
+                return Fin<(Cart, Option<string>, HashMap<ProductId, CartLine>)>.Fail(Error.New("Cannot create a Cart for non-existent customer"));
+
+            using var conn = new SqliteConnection(_env.ConnectionString);
+            conn.Open();
+            // Ensure cart row exists
+            Guid cartId;
+            using (var ensure = conn.CreateCommand())
+            {
+                ensure.CommandText = "INSERT INTO Carts (Id, UserId) SELECT @Id,@U WHERE NOT EXISTS (SELECT 1 FROM Carts WHERE UserId=@U) RETURNING Id";
+                var newId = Guid.NewGuid();
+                ensure.Parameters.AddWithValue("@Id", newId.ToString());
+                ensure.Parameters.AddWithValue("@U", userId.ToString());
+                try { ensure.ExecuteNonQuery(); } catch { }
+            }
+            using (var sel = conn.CreateCommand())
+            {
+                sel.CommandText = "SELECT Id FROM Carts WHERE UserId=@U LIMIT 1";
+                sel.Parameters.AddWithValue("@U", userId.ToString());
+                var cid = sel.ExecuteScalar()?.ToString();
+                cartId = cid != null ? Guid.Parse(cid) : Guid.NewGuid();
+            }
+
+            HashMap<ProductId, CartLine> items = HashMap<ProductId, CartLine>();
+            Option<string> currencyOpt = None;
+            using (var lines = conn.CreateCommand())
+            {
+                lines.CommandText = "SELECT ProductId, Quantity, UnitPrice, Currency FROM CartLines WHERE CartId=@C";
+                lines.Parameters.AddWithValue("@C", cartId.ToString());
+                using var rdr = lines.ExecuteReader();
+                while (rdr.Read())
+                {
+                    var pid = new ProductId(Guid.Parse(rdr.GetString(0)));
+                    var qty = rdr.GetInt32(1);
+                    var unitPrice = rdr.GetDecimal(2);
+                    var currency = rdr.GetString(3);
+                    currencyOpt = Some(currency);
+                    items = items.Add(pid, new CartLine(pid, qty, new Money(currency, unitPrice)));
+                }
+            }
+
+            var cartItems = new CartItems(items);
+            var cart = new Cart(cartId, userId, cartItems, currencyOpt);
+            return FinSucc((cart, currencyOpt, items));
+        }
+        catch (Exception ex)
+        {
+            return Fin<(Cart, Option<string>, HashMap<ProductId, CartLine>)>.Fail(Error.New(ex));
+        }
+    }
+
     private static void AddParameters(SqliteCommand cmd, PaymentIntent intent)
     {
         string? clientSecretOrNull = intent.ClientSecret.Match<string?>(s => s, () => null);

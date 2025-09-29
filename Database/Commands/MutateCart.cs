@@ -37,7 +37,7 @@ public sealed record AddCartLineCommand(Guid CartId, Guid UserId, Guid ProductId
             var snap = result.Match(s => s, _ => default(CartSnapshot));
             if (snap != null)
             {
-                yield return ("cart.items.count", snap.Items.Count);
+                yield return ("cart.items.count", snap.GetItemsAmount());
                 yield return ("cart.subtotal", snap.Subtotal.Amount);
             }
         }
@@ -69,7 +69,7 @@ public sealed record SetCartLineQuantityCommand(Guid CartId, Guid UserId, Guid P
             var snap = result.Match(s => s, _ => default(CartSnapshot));
             if (snap != null)
             {
-                yield return ("cart.items.count", snap.Items.Count);
+                yield return ("cart.items.count", snap.GetItemsAmount());
                 yield return ("cart.subtotal", snap.Subtotal.Amount);
             }
         }
@@ -100,7 +100,7 @@ public sealed record RemoveCartLineCommand(Guid CartId, Guid UserId, Guid Produc
             var snap = result.Match(s => s, _ => default(CartSnapshot));
             if (snap != null)
             {
-                yield return ("cart.items.count", snap.Items.Count);
+                yield return ("cart.items.count", snap.GetItemsAmount());
                 yield return ("cart.subtotal", snap.Subtotal.Amount);
             }
         }
@@ -130,7 +130,7 @@ public sealed record ClearCartCommand(Guid CartId, Guid UserId)
             var snap = result.Match(s => s, _ => default(CartSnapshot));
             if (snap != null)
             {
-                yield return ("cart.items.count", snap.Items.Count);
+                yield return ("cart.items.count", snap.GetItemsAmount());
                 yield return ("cart.subtotal", snap.Subtotal.Amount);
             }
         }
@@ -278,18 +278,33 @@ public sealed class CartPersistenceImplementation(DatabaseConfig cfg, ILogger<Ca
         lines.CommandText = "SELECT ProductId, Quantity, UnitPrice, Currency FROM CartLines WHERE CartId=@C";
         lines.Parameters.AddWithValue("@C", cartId.ToString());
         using var rdr = lines.ExecuteReader();
-        Map<ProductId, CartLine> map = Map<ProductId, CartLine>();
+        HashMap<ProductId, CartLine> map = HashMap<ProductId, CartLine>();
+        Option<string> currencyOpt = None;
         while (rdr.Read())
         {
             var pid = new ProductId(Guid.Parse(rdr.GetString(0)));
             var q = rdr.GetInt32(1);
             var price = rdr.GetDecimal(2);
             var cur = rdr.GetString(3);
+            currencyOpt = Some(cur);
             map = map.Add(pid, new CartLine(pid, q, new Money(cur, price)));
         }
-        var subtotal = map.Values.Fold(0m, (acc, l) => acc + l.UnitPrice.Amount * l.Quantity);
-        var currency = map.Values.IsEmpty() ? "SEK" : map.Values.Head().Match(l => l.UnitPrice.Currency, () => "SEK");
-        return FinSucc(new CartSnapshot(cartId, userId, map, new Money(currency, subtotal), "SE", "NA"));
+        // Build domain Cart first
+        var cart = new Cart(cartId, userId, new CartItems(map), currencyOpt);
+        var subtotal = cart.GetTotal();
+
+        // Raw snapshot (initially invalid, empty errors) then enrich through factory to compute validity + errors
+        var raw = new CartSnapshot(
+            cart,
+            new RegisteredCustomerId(userId),
+            subtotal,
+            "SE",
+            "NA",
+            false,
+            System.Array.Empty<string>());
+
+        var enriched = CartSnapshotFactory.Enrich(raw);
+        return FinSucc(enriched);
     }
 }
 

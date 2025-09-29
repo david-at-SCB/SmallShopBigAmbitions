@@ -9,8 +9,9 @@ using SmallShopBigAmbitions.Monads.TraceableTransformer;
 using static LanguageExt.Prelude;
 using SmallShopBigAmbitions.Application._PipelineBehaviours;
 using SmallShopBigAmbitions.Application._Abstractions;
+using SmallShopBigAmbitions.Models;
 
-public sealed record AuthorizePaymentCommand(Guid OrderId, Guid CartId, PaymentMethod Method, string Currency, string? IdempotencyKey)
+public sealed record AuthorizePaymentCommand(Guid OrderId, Guid CartId, CustomerId Customer, PaymentMethod Method, Money Amount, string? IdempotencyKey)
     : IFunctionalRequest<IntentToPayDto>, IIdempotentRequest
 {
     public string IdempotencyScope => "payment.authorize";
@@ -35,8 +36,9 @@ public sealed class AuthorizePaymentHandler(
         // Reuse CreateIntentToPayHandler via dispatcher to create a provider intent
         var cmd = new IntentToPayCommand(
             CartId: request.CartId,
+            CustomerId: request.Customer,
             Method: request.Method,
-            Currency: request.Currency,
+            Amount: request.Amount,
             IdempotencyKey: request.IdempotencyKey,
             ShippingAddress: null,
             Metadata: Map<string, string>());

@@ -1,7 +1,6 @@
 ﻿using SmallShopBigAmbitions.Application._Policy;
 using SmallShopBigAmbitions.Auth;
 using SmallShopBigAmbitions.FunctionalDispatcher;
-using System.Linq;
 
 namespace SmallShopBigAmbitions.Application._PipelineBehaviours;
 
@@ -24,15 +23,16 @@ public class AuthorizationBehavior<TRequest, TResponse> : IFunctionalPipelineBeh
         // Policies run against TrustedContext which is derived from ASP.NET authentication middleware
         return IO.lift<Fin<TResponse>>(() =>
         {
-            var authFin = _policies
-                .Select(p => p.Authorize(request, context))
-                .Aggregate(
-                    seed: Fin<Unit>.Succ(Unit.Default),
-                    func: (acc, cur) => acc.Bind(_ => cur)
-                );
-
-            if (authFin.IsFail)
-                return Fin<TResponse>.Fail((Error)authFin);
+            // Fail-fast: iterate policies in order; short-circuit on first failure to guarantee no further policy execution after first failure.
+            // Avoid evaluating later policies when one fails, save unnecessary DB and other external calls.
+            foreach (var policy in _policies)
+            {
+                var fin = policy.Authorize(request, context);
+                if (fin.IsFail)
+                {
+                    return Fin<TResponse>.Fail((Error)fin);
+                }
+            }
 
             return next(request, context, ct).Run();
         });

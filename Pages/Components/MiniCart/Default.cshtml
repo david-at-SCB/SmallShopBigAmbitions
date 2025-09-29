@@ -14,7 +14,7 @@ else
         }
     </ul>
     <div class="fw-semibold small">
-        Total: @Model.Total("SEK").Amount SEK
+        Total: @Model.GetTotal().Amount SEK
     </div>
     <a asp-page="/Cart" class="btn btn-sm btn-primary mt-2 w-100">View cart</a>
 }

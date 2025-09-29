@@ -63,7 +63,8 @@ public class BillingController(IFunctionalDispatcher dispatcher, ICartService ca
         return new IntentToPayCommand(
             CartId: payload.CartId,
             Method: payload.Method ?? PaymentMethod.Card,
-            Currency: payload.Currency,
+            CustomerId: payload.UserId,
+            Amount: payload.Amount,
             IdempotencyKey: payload.IdempotencyKey ?? GenerateIdempotencyKey(payload),
             ShippingAddress: payload.ShippingAddress,
             Metadata: ToMap(payload.Metadata)
@@ -82,7 +83,7 @@ public class BillingController(IFunctionalDispatcher dispatcher, ICartService ca
     {
         // Prefer client-supplied keys for true idempotency across retries.
         // If not provided, derive a deterministic key from stable fields so repeated identical requests dedupe.
-        var raw = $"intent-create|{payload.UserId}|{payload.CartId}|{payload.Currency}|{payload.Method ?? PaymentMethod.Card}|{payload.ShippingAddress}";
+        var raw = $"intent-create|{payload.UserId}|{payload.CartId}|{payload.Amount}|{payload.Method ?? PaymentMethod.Card}|{payload.ShippingAddress}";
         using var sha = SHA256.Create();
         var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
         return Convert.ToHexString(bytes);
@@ -90,9 +91,9 @@ public class BillingController(IFunctionalDispatcher dispatcher, ICartService ca
 
     public record PaymentIntentDTOPayloadFromView()
     {
-        public Guid UserId { get; init; }
+        public required CustomerId UserId { get; init; }
         public Guid CartId { get; init; }
-        public string Currency { get; init; } = "SEK";
+        public required Money Amount { get; init; }
         public string? ShippingAddress { get; init; }
         public PaymentMethod? Method { get; init; }
         public string? IdempotencyKey { get; init; }

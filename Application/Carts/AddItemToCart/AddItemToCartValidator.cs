@@ -19,4 +19,9 @@ public static class AddItemToCartValidator
             Rule.From("currency_present", () => !string.IsNullOrWhiteSpace(cmd.PriceRef.Currency), ErrorCodes.Cart_Add_CurrencyMissing),
             Rule.From("distinct_lines", () => currentDistinctLines < MaxDistinctLines, ErrorCodes.Cart_Add_TooManyLines)
         );
+
+    public static Validation<Seq<Error>, Unit> HasCurrency(Models.Cart cart) =>
+        cart.Currency.IsSome
+            ? Success<Seq<Error>, Unit>(unit)
+            : Fail<Seq<Error>, Unit>(Prelude.Seq(Error.New("Cart currency is not set")));
 }

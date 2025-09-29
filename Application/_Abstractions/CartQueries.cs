@@ -30,18 +30,34 @@ public sealed class InMemoryCartQueries(DatabaseConfig cfg, ILogger<InMemoryCart
             linesCmd.CommandText = "SELECT ProductId, Quantity, UnitPrice, Currency FROM CartLines WHERE CartId=@CartId";
             linesCmd.Parameters.AddWithValue("@CartId", dbCartId.ToString());
             using var lineReader = linesCmd.ExecuteReader();
-            Map<ProductId, CartLine> map = Map<ProductId, CartLine>();
+            HashMap<ProductId, CartLine> lines = HashMap<ProductId, CartLine>();
+            Option<string> currencyOpt = None;
             while (lineReader.Read())
             {
                 var productId = new ProductId(Guid.Parse(lineReader.GetString(0)));
                 var qty = lineReader.GetInt32(1);
                 var unitPrice = lineReader.GetDecimal(2);
                 var currency = lineReader.GetString(3);
-                map = map.Add(productId, new CartLine(productId, qty, new Money(currency, unitPrice)));
+                currencyOpt = Some(currency);
+                lines = lines.Add(productId, new CartLine(productId, qty, new Money(currency, unitPrice)));
             }
-            var subtotalAmt = map.Values.Fold(0m, (acc, line) => acc + (line.UnitPrice.Amount * line.Quantity));
-            var currencyAll = map.Values.IsEmpty() ? "SEK" : map.Values.Head().Match(l => l.UnitPrice.Currency, () => "SEK");
-            var snapshot = new CartSnapshot(dbCartId, userId, map, new Money(currencyAll, subtotalAmt), "SE", "NA");
+            var cart = new Models.Cart(dbCartId, userId, new CartItems(lines), currencyOpt);
+            var subtotal = cart.GetTotal();
+
+            // Raw snapshot, mark invalid initially; factory/enrichment can adjust later.
+            var snapshot = new CartSnapshot(
+                cart,
+                new RegisteredCustomerId(userId),
+                subtotal,
+                "SE", // TODO: derive country / region
+                "NA",
+                false,
+                []
+            );
+
+            // If you have a factory/enricher, call it here (uncomment when available)
+            // snapshot = CartSnapshotFactory.Enrich(snapshot);
+
             return Fin<CartSnapshot>.Succ(snapshot);
         }
         catch (Exception ex)
@@ -50,4 +66,10 @@ public sealed class InMemoryCartQueries(DatabaseConfig cfg, ILogger<InMemoryCart
             return Fin<CartSnapshot>.Fail(Error.New(ex));
         }
     });
+}
+
+// Minimal RegisteredCustomerId (if not already present elsewhere). Replace with real implementation if duplicated.
+file sealed record RegisteredCustomerId(Guid Id) : CustomerId(Id)
+{
+    public override bool IsRegistered => true;
 }

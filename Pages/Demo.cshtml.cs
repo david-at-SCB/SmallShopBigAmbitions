@@ -32,6 +32,7 @@ public class DemoModel : PageModel
 
     // State
     [BindProperty] public Guid UserId { get; set; }
+    [BindProperty] public Guid CustomerGuid { get; set; } // underlying customer identifier (registered or guest)
 
     public Option<Fin<Cart>> Cart { get; private set; } = Option<Fin<Cart>>.None;
     public Option<Fin<AddItemToCartResult>> AddItemResult { get; private set; } = Option<Fin<AddItemToCartResult>>.None;
@@ -44,9 +45,14 @@ public class DemoModel : PageModel
 
     [BindProperty] public Guid? CurrentPaymentIntentId { get; set; }
 
+    // Computed customer (domain) identity for display / commands
+    public CustomerId DomainCustomer => CreateCustomer(UserId);
+    public string CustomerKind => DomainCustomer.IsRegistered ? "registered" : "guest";
+
     public async Task OnGetAsync(CancellationToken ct)
     {
         UserId = _userService.EnsureUserId(HttpContext).userId;
+        CustomerGuid = DomainCustomer.Id;
         await LoadCart(UserId, ct);
     }
 
@@ -78,6 +84,7 @@ public class DemoModel : PageModel
             LoginMessage = "Invalid credentials";
         }
         UserId = _userService.EnsureUserId(HttpContext).userId;
+        CustomerGuid = DomainCustomer.Id;
         await LoadCart(UserId, ct);
         return Page();
     }
@@ -87,6 +94,7 @@ public class DemoModel : PageModel
     {
         using var act = _activity.StartActivity("demo.add_item", ActivityKind.Internal);
         UserId = _userService.EnsureUserId(HttpContext).userId;
+        CustomerGuid = DomainCustomer.Id;
         var qFin = Quantity.Create(1);
         var cmd = qFin.IsSucc
             ? new AddItemToCartCommand(UserId, new ExternalProductRef(1, CatalogProvider.FakeStore), qFin.Match(q => q, _ => default), new Money("SEK", 150), "demo.page")
@@ -109,6 +117,7 @@ public class DemoModel : PageModel
     {
         using var act = _activity.StartActivity("demo.create_intent", ActivityKind.Internal);
         UserId = _userService.EnsureUserId(HttpContext).userId;
+        CustomerGuid = DomainCustomer.Id;
         // Need cart id from snapshot; load cart first
         await LoadCart(UserId, ct);
         var cartId = Cart.Match(
@@ -121,17 +130,27 @@ public class DemoModel : PageModel
         }
         var meta = Map(("ui.flow", "demo"));
         var cmd = new IntentToPayCommand(
-            CartId: cartId,
-            Method: PaymentMethod.Card,
-            Currency: "SEK",
-            IdempotencyKey: null,
-            ShippingAddress: null,
-            Metadata: meta);
+            cartId,
+            DomainCustomer,
+            PaymentMethod.Card,
+            Guid.NewGuid().ToString(),
+            new Money(CartCurrency, CartTotal),
+            "I am a shippingadress",
+            meta);
         var fin = await _dispatcher.Dispatch<IntentToPayCommand, IntentToPayDto>(cmd, ct).RunAsync();
         PaymentIntentResult = Option<Fin<IntentToPayDto>>.Some(fin);
         CurrentPaymentIntentId = fin.Match(Succ: dto => dto.PaymentIntentId, Fail: _ => CurrentPaymentIntentId);
         act?.SetTag("payment.intent.created", fin.IsSucc);
         return Page();
+    }
+
+    private CustomerId CreateCustomer(Guid userId)
+    {
+        var fin = _userService.GetUserById(userId).RunTraceable().Run();
+        return fin.Match(
+            Succ: c => c.Id,                               // already a CustomerId
+            Fail: _ => new GuestCustomerId(userId, "")     // fallback
+        );
     }
 
     // 4. Capture intent (simulate completion)
@@ -158,4 +177,17 @@ public class DemoModel : PageModel
             Fail: e => Option<Fin<Cart>>.Some(Fin<Cart>.Fail(e))
         );
     }
+
+    public decimal CartTotal => Cart
+        .Match(
+            Some: fin => fin.Match(
+                Succ: c => c.GetTotal().Amount,
+                Fail: _ => 0m),
+            None: () => 0m);
+    public string CartCurrency => Cart
+        .Match(
+            Some: fin => fin.Match(
+                Succ: c => c.GetTotal().Currency,
+                Fail: _ => "—"),
+            None: () => "—");
 }

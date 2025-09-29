@@ -41,14 +41,9 @@
 
 <section class="mb-4 border rounded p-3">
     <h4>3. Cart Snapshot</h4>
-    @{ if (Model.Cart.IsSome)
-       {
-           var cartFin = Model.Cart.Match(Some: c => c, None: () => default!);
-           if (cartFin.IsSucc)
-           {
-               var cart = cartFin.Match(c => c, _ => null); }
-    }
-    }
+    <div>
+       <strong>Total:</strong> @Model.CartTotal @Model.CartCurrency
+    </div>
     @if (Model.Cart.IsSome)
     {
         var cartFin2 = Model.Cart.Match(Some: c => c, None: () => default!);
@@ -65,7 +60,7 @@
                 <ul class="mt-2">
                     @foreach (var line in cart.Items.Lines)
                     {
-                        <li>@line.Value.Quantity x @line.Value.UnitPrice.Amount @line.Value.UnitPrice.Currency</li>
+                       <></> <li>@line.Value.Quantity x @line.Value.UnitPrice.Amount @line.Value.UnitPrice.Currency</li>
                     }
                 </ul>
             }

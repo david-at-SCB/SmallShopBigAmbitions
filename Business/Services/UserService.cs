@@ -23,7 +23,7 @@ public class UserService(IDataAccess DataAccess)
         _dataAccess.GetCustomerById(userId);
 
     public TraceableT<Fin<Customer>> GetUserById(Customer customer) =>
-        _dataAccess.GetCustomerById(customer.Id);
+        _dataAccess.GetCustomerById(customer.Id.Id); // TODO: bah, hide later!
 
     /// <summary>
     /// Resolve a stable caller/user id. Prefers authenticated NameIdentifier (or sub/oid via TrustedContextFactory logic),

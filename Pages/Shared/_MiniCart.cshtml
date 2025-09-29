@@ -5,8 +5,10 @@
 }
 else
 {
-    <div class="small">
-        <strong>@Model.Items.Count</strong> item(s) • Total: @Model.Total("SEK").Amount @Model.Total("SEK").Currency
-    </div>
+    {
+        var total = Model.GetTotal();
+
+        <div class="small"> <strong>@Model.Items.Count</strong> item(s) • Total: @total.Amount @total.Currency </div>
+    }
 }
 <a asp-page="/Cart" class="btn btn-sm btn-outline-primary mt-1">View Cart</a>

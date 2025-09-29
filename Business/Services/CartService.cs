@@ -20,6 +20,9 @@ public interface ICartService
     TraceableT<Fin<Cart>> AddItems(Cart cart, HashMap<ProductId, CartLine> items);
 
     Cart GetCartByUserId(Guid userId);
+
+    TraceableT<bool> SaveCart(CartSnapshot Cart);
+    void LogFailedCheckoutAttempt(Error error, Guid customer);
 }
 
 public class CartService(IDataAccess dataAccess) : ICartService
@@ -73,4 +76,14 @@ public class CartService(IDataAccess dataAccess) : ICartService
             .RunTraceable()
             .Run()
             .Match(Succ: c => c, Fail: _ => Cart.Empty(userId));
+
+    public TraceableT<bool> SaveCart(CartSnapshot Cart)
+    {
+        throw new NotImplementedException();
+    }
+
+    public void LogFailedCheckoutAttempt(Error error, Guid customer)
+    {
+        throw new NotImplementedException();
+    }
 }

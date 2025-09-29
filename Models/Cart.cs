@@ -5,28 +5,67 @@ using SmallShopBigAmbitions.Models.Validation;
 using LanguageExt;
 namespace SmallShopBigAmbitions.Models;
 
-public sealed record Cart(Guid Id, Guid CustomerId, CartItems Items)
+/// <summary>
+/// TODO!
+/// </summary>
+/// <param name="Id"></param>
+/// <param name="CustomerId"> TODO: Make this to be string(email) or Guid</param>
+/// <param name="Items"></param>
+/// <param name="Currency"></param>
+public sealed record Cart(Guid Id, Guid CustomerId, CartItems Items, Option<string> Currency)
 {
-    public static Cart Empty(Guid customerId) => new(Guid.NewGuid(), customerId, CartItems.Empty);
+    public static Cart Empty(Guid customerId) => new(Guid.NewGuid(), customerId, CartItems.Empty, None);
 
     public Cart Add(ProductId id, int qty, Money price) => this with { Items = Items.Add(id, qty, price) };
 
     public Cart SetQuantity(ProductId id, int qty) => this with { Items = Items.SetQuantity(id, qty) };
 
-    public Money Total(string currency) => new(currency, Items.Values.Sum(l => l.UnitPrice.Amount * l.Quantity));
+    //public Money Total(string currency) => new(currency, Items.Values.Sum(l => l.UnitPrice.Amount * l.Quantity));
+
+    public Money GetTotal() =>
+        new(
+            Currency.Match(
+                Some: c => c,
+                None: "SEK"
+            ),
+            Items.Values.Sum(l => l.UnitPrice.Amount * l.Quantity)
+        );
+
+    public string GetCartCurrency() =>
+        Currency.Match(
+            Some: c => c,
+            None: "SEK"
+        );
+
+    public int GetAmountOfItems() => Items.Values.Sum(l => l.Quantity); 
 
     public bool ValidTotal() =>
         !Items.IsEmpty
         && Items.Values.All(l => l.Quantity > 0 && l.UnitPrice.Amount > 0)
         && Items.Values.Sum(l => l.UnitPrice.Amount * l.Quantity) > 0m;
 
-    public Fin<Unit> ValidateForCharge()
+    public Fin<CartSnapshot> ValidateForCharge(Guid customerId)
     {
         var validation = CartValidator.ValidateForCharge(this);
-        return validation.Match(
-            Succ: _ => Fin<Unit>.Succ(Unit.Default),
-            Fail: errs => Fin<Unit>.Fail(Error.New(string.Join("; ", errs.Map(e => e.Message))))
+        var errors = validation.Match(
+            Succ: _ => [],
+            Fail: errs => errs.Map(e => e.Message).ToArray()
         );
+        var isValid = errors.Length == 0;
+
+        var snapshot = new CartSnapshot(
+            this,
+            new RegisteredCustomerId(customerId),
+            GetTotal(),
+            "Sweden",
+            "Europe",
+            isValid,
+            errors
+        );
+
+        return isValid
+            ? Fin<CartSnapshot>.Succ(snapshot)
+            : Fin<CartSnapshot>.Fail(Error.New(string.Join("; ", errors)));
     }
 
     public static IO<Fin<Cart>> AddToCart(
@@ -60,4 +99,18 @@ public sealed record Cart(Guid Id, Guid CustomerId, CartItems Items)
             select cart.Add(pid, qty, price);
 
     private static KeyValuePair<string, object> KVP(string k, object v) => new(k, v);
+
+    //private CartSnapshot ToSnapshotWithValidation(Guid CustomerId, string country, string region)
+    //{
+    //    var customer = new RegisteredCustomerId(CustomerId);
+    //    var validation = CartValidator.ValidateForCharge(this);
+    //    var errors = validation.Match(
+    //        Succ: _ => [],
+    //        Fail: errs => errs.Map(e => e.Message).ToArray()
+    //    );
+    //    var isValid = errors.Length == 0;
+    //    // but if we have errors... should we have a total? what if its negative? what if its zero?
+    //    // we should freeze the items in the cart, not the total, right?
+    //    return new CartSnapshot(this, customer, GetTotal(), country, region, isValid, errors);
+    //}
 }

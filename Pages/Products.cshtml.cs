@@ -59,7 +59,7 @@ public class ProductsModel : PageModel
         );
 
         Message = resultFin.Match(
-            Succ: r => $"Added product {r.APIProductId} (x{r.Quantity}). Cart now has {r.Cart.Items.Count} line(s).",
+            Succ: r => $"Added product {r.APIProductId} (x{r.Quantity}). Cart now has {r.Cart.GetItemsAmount()} line(s).",
             Fail: e => e.Message == "cart.add.anonymous_not_persisted" ?
                 "Login or impersonate to persist cart items." :
                 $"Add failed: {e.Message}");

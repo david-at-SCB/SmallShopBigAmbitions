@@ -10,7 +10,6 @@
 using SmallShopBigAmbitions.Application.Billing.CheckoutUser;
 using SmallShopBigAmbitions.Models;
 using SmallShopBigAmbitions.Monads.TraceableTransformer;
-using LanguageExt;
 
 namespace SmallShopBigAmbitions.Business.Services;
 
@@ -51,42 +50,45 @@ public class BillingService
                     Succ: r =>
                     [
                         new KeyValuePair<string, object>("billing.success", true),
-                    new KeyValuePair<string, object>("billing.message", r.Message),
-                    new KeyValuePair<string, object>("cart.id", r.Cart),
-                    new KeyValuePair<string, object>("user.id", r.Customer),
-                    new KeyValuePair<string, object>("transaction.id", r.Transaction),
-                    new KeyValuePair<string, object>("receipt.id", r.Receipt)
+                        new KeyValuePair<string, object>("billing.message", r.Message),
+                        new KeyValuePair<string, object>("cart.id", r.Cart),
+                        new KeyValuePair<string, object>("user.id", r.Customer),
+                        new KeyValuePair<string, object>("transaction.id", r.Transaction),
+                        new KeyValuePair<string, object>("receipt.id", r.Receipt)
                     ],
                     Fail: err => new[]
                     {
-                    new KeyValuePair<string, object>("billing.success", false),
-                    new KeyValuePair<string, object>("billing.error", err.Message)
+                        new KeyValuePair<string, object>("billing.success", false),
+                        new KeyValuePair<string, object>("billing.error", err.Message)
                     }
                 );
             }
         );
     }
 
-    public TraceableT<CheckoutUserResultDTO> CheckoutCustomerCart(Cart cart)
+    public TraceableT<string> CheckoutCustomerCart( )
     {
+        // HOW do we checkout a customers cart?
+
         // TODO: implement real logic
-        var chargedResult = new ChargeResult(
-            Message: Some("Charge successful"),
-            Cart: cart.Id,
-            Customer: cart.CustomerId,
-            Transaction: Guid.NewGuid(),
-            Receipt: Guid.NewGuid()
-        );
+        //var chargedResult = new ChargeResult(
+        //    Message: Some("Charge successful"),
+        //    Cart: cart.Id,
+        //    Customer: cart.CustomerId,
+        //    Transaction: Guid.NewGuid(),
+        //    Receipt: Guid.NewGuid()
+        //);
 
-        var dto = TraceableTLifts.FromValue(
-            new CheckoutUserResultDTO(
-                CustomerId: cart.CustomerId,
-                Cart: cart,
-                Message: "Checkout completed successfully.",
-                Charged: Fin<ChargeResult>.Succ(chargedResult)
-            ),
-            spanName: "CustomerCharged");
+        //var dto = TraceableTLifts.FromValue(
+        //    new CheckoutUserResultDTO(
+        //        CustomerId: cart.CustomerId,
+        //        Cart: cart,
+        //        Message: "Checkout completed successfully.",
+        //        Charged: Fin<ChargeResult>.Succ(chargedResult)
+        //    ),
+        //    spanName: "CustomerCharged");
 
-        return dto;
+        //return dto;
+        return TraceableTLifts.FromValue("TODO!", "NOT IMPLEMENTED!");
     }
 }
