@@ -27,6 +27,6 @@ public static class CartSnapshotFactory
         // You could add pricing / catalog consistency rules here (ensure products still exist, etc.)
 
         var valid = errors.Count == 0;
-        return snapshot with { Valid = valid, Errors = errors.ToArray() };
+        return snapshot with { Valid = valid, Errors = [.. errors] };
     }
 }

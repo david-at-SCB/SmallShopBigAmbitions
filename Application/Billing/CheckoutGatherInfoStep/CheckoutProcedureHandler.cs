@@ -1,6 +1,5 @@
-﻿namespace SmallShopBigAmbitions.Application.Billing.CheckoutGatherInfoStep
+﻿namespace SmallShopBigAmbitions.Application.Billing.CheckoutGatherInfoStep;
+
+public class CheckoutProcedureHandler
 {
-    public class CheckoutProcedureHandler
-    {
-    }
 }

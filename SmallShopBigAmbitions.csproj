@@ -39,6 +39,8 @@
 		<Folder Include="Application\Carts\ResetCart\" />
 		<Folder Include="Application\Products\GetAProduct\" />
 		<Folder Include="Tools\" />
+		<Folder Include="UnitTests\Billing\" />
+		<Folder Include="UnitTests\Carts\" />
 		<Folder Include="ViewModels\" />
 	</ItemGroup>
 
