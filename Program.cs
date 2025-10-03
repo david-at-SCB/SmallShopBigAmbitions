@@ -79,7 +79,6 @@ builder.Services.AddSingleton(new DatabaseConfig { ConnectionString = dbConnecti
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .Enrich.FromLogContext()
-    .WriteTo.Console()
     .WriteTo.OpenTelemetry(opts =>
     {
         opts.Endpoint = "http://localhost:4317";
@@ -114,7 +113,7 @@ builder.Services.AddOpenTelemetry()
             Telemetry.OrderServiceSource.Name,
             Telemetry.SiteWideActivitySourceName)
         .SetSampler(new AlwaysOnSampler())
-        .AddConsoleExporter() // TEMP: verify spans produced before relying solely on OTLP
+        //.AddConsoleExporter() // TEMP: verify spans produced before relying solely on OTLP
         .AddOtlpExporter(o =>
         {
             o.Endpoint = new Uri("http://localhost:4317"); // gRPC (Tempo)

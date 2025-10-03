@@ -13,6 +13,7 @@ using SmallShopBigAmbitions.TracingSources;
 using System.Diagnostics;
 using System.Security.Claims;
 using SmallShopBigAmbitions.Application._Abstractions; // for PaymentMethod
+using SmallShopBigAmbitions.Monads.TraceableTransformer; // added for TraceableTLifts
 
 namespace SmallShopBigAmbitions.Pages;
 
@@ -59,30 +60,72 @@ public class DemoModel : PageModel
     // 1. Inline login (optional)
     public async Task<IActionResult> OnPostLoginAsync(CancellationToken ct)
     {
-        using var act = _activity.StartActivity("demo.login", ActivityKind.Internal);
-        if (string.IsNullOrWhiteSpace(LoginEmail) || string.IsNullOrWhiteSpace(LoginPassword))
-        {
-            LoginMessage = "Email + password required";
-        }
-        else if (_dummyUsers.ValidateCredentials(LoginEmail, LoginPassword, out var user) && user is not null)
-        {
-            var claims = new List<Claim>
+        DummyUser? resolvedUser = null;
+        // Single traced span covering validation + sign-in
+        static KeyValuePair<string, object> KVP(string k, object v) => new(k, v ?? string.Empty);
+
+        var loginTrace = TraceableTLifts.FromIO<Fin<Unit>>(
+            IO.lift<Fin<Unit>>(() =>
             {
-                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new(ClaimTypes.Email, user.Email),
-                new("display_name", user.DisplayName),
-                new("auth_kind", "password.demo")
-            };
-            foreach (var r in user.Roles) claims.Add(new Claim(ClaimTypes.Role, r));
-            var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "DummyAuth"));
-            await HttpContext.SignInAsync("DummyAuth", principal, new AuthenticationProperties { IsPersistent = true });
-            HttpContext.User = principal;
-            LoginMessage = $"Logged in as {user.DisplayName}";
-        }
-        else
-        {
-            LoginMessage = "Invalid credentials";
-        }
+                // Validate inputs
+                if (string.IsNullOrWhiteSpace(LoginEmail) || string.IsNullOrWhiteSpace(LoginPassword))
+                {
+                    return Fin<Unit>.Fail(Error.New("login.missing_credentials"));
+                }
+                // Credential check
+                if (!_dummyUsers.ValidateCredentials(LoginEmail, LoginPassword, out var user) || user is null)
+                {
+                    return Fin<Unit>.Fail(Error.New("login.invalid_credentials"));
+                }
+                // Success – build claims & sign in (synchronously awaited to remain inside span)
+                resolvedUser = user;
+                var claims = new List<Claim>
+                {
+                    new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                    new(ClaimTypes.Email, user.Email),
+                    new("display_name", user.DisplayName),
+                    new("auth_kind", "password.demo")
+                };
+                foreach (var r in user.Roles) claims.Add(new Claim(ClaimTypes.Role, r));
+                var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "DummyAuth"));
+                // Blocking wait acceptable here for simplicity (no ASP.NET SynchronizationContext)
+                HttpContext.SignInAsync("DummyAuth", principal, new AuthenticationProperties { IsPersistent = true })
+                           .GetAwaiter().GetResult();
+                HttpContext.User = principal;
+                return Fin<Unit>.Succ(unit);
+            }),
+            "demo.login")
+            .WithAttributes(fin => fin.Match(
+                Succ: _ => new[]
+                {
+                    KVP("auth.success", true),
+                    KVP("auth.kind", "password.demo"),
+                    KVP("user.id", resolvedUser?.Id),
+                    KVP("user.roles", resolvedUser is null ? string.Empty : string.Join(',', resolvedUser.Roles)),
+                    KVP("credentials.present", true)
+                },
+                Fail: e => new[]
+                {
+                    KVP("auth.success", false),
+                    KVP("error.type", e.GetType().Name),
+                    KVP("error.message", e.Message),
+                    KVP("credentials.present", !(string.IsNullOrWhiteSpace(LoginEmail) || string.IsNullOrWhiteSpace(LoginPassword)))
+                }));
+
+        var fin = await loginTrace
+            .RunTraceable(ct)
+            .RunAsync();
+
+        // UI side-effects (outside span)
+        LoginMessage = fin.Match(
+            Succ: _ => $"Logged in as {resolvedUser?.DisplayName}",
+            Fail: e => e.Message switch
+            {
+                "login.missing_credentials" => "Email + password required",
+                "login.invalid_credentials" => "Invalid credentials",
+                _ => $"Login failed: {e.Message}"
+            });
+
         UserId = _userService.EnsureUserId(HttpContext).userId;
         CustomerGuid = DomainCustomer.Id;
         await LoadCart(UserId, ct);

@@ -37,7 +37,7 @@ public class IndexModel : PageModel
 
     // optional injection
     private readonly UserService _userService;
-     // inline login support
+    // inline login support
 
     public IndexModel(IFunctionalDispatcher dispatcher, UserService userService, IDummyUserStore dummyUsers, IClaimsTransformation? claimsTransformation = null)
     {
@@ -123,39 +123,49 @@ public class IndexModel : PageModel
         return Page();
     }
 
-    public async Task<IActionResult> OnGetRunTestSpanAsync()
-    {
-        using var activity = Telemetry.SiteWideServiceSource.StartActivity("test-span");
-
-        if (activity != null)
-        {
-            activity.SetTag("custom.tag", "test-value");
-            await Task.Delay(500); // simulate work
-        }
-        return Page();
-    }
-
     public async Task<IActionResult> OnPostSayHelloAsync(string name)
     {
-        var request = new HelloWorldRequest(name ?? "World");
+        // build + dispatch under a single traceable span.
+        var effectiveName = string.IsNullOrWhiteSpace(name) ? "World" : name;
+        var request = new HelloWorldRequest(effectiveName);
+        var (userId, isAuth, _) = _userService.EnsureUserId(HttpContext);
 
-        var traceableRequest = TraceableTLifts.FromIO<HelloWorldRequest>(
-            IO.lift(() => request),
-            "HelloWorldRequest"
-        );
+        // local helper to avoid repetition
+        static KeyValuePair<string, object> KVP(string k, object v) => new(k, v ?? string.Empty);
 
-        var result = await traceableRequest
-            .Bind(req => TraceableTLifts.FromIO<Fin<string>>(
-                _dispatcher.Dispatch<HelloWorldRequest, string>(req, CancellationToken.None),
-                "DispatchHelloWorld"
-            ))
+        // Mole de olla, span with attributes based on success/failure
+        var trace = TraceableTLifts.FromIO<Fin<string>>(
+                _dispatcher.Dispatch<HelloWorldRequest, string>(request, CancellationToken.None),
+                "helloworld.request")
+            // additional attributes based on result, these are optional but very useful
+            .WithAttributes(fin => fin.Match(
+                Succ: msg => new[]
+                {
+                    KVP("helloworld.success", true),
+                    KVP("helloworld.result.length", msg.Length),
+                    KVP("request.name", effectiveName),
+                    KVP("user.id", userId),
+                    KVP("user.authenticated", isAuth)
+                },
+                Fail: e => new[]
+                {
+                    KVP("helloworld.success", false),
+                    KVP("error.type", e.GetType().Name),
+                    KVP("error.message", e.Message),
+                    KVP("request.name", effectiveName),
+                    KVP("user.id", userId),
+                    KVP("user.authenticated", isAuth)
+                }));
+
+        // run the effect, get final result
+        var fin = await trace
             .RunTraceable(CancellationToken.None)
             .RunAsync();
 
-        HelloResult = result.Match(
+        // put the result message into a property for the page
+        HelloResult = fin.Match(
             Succ: msg => msg,
-            Fail: err => $"Error: {err.Message}"
-        );
+            Fail: err => $"Error: {err.Message}" );
 
         return Page();
     }

@@ -23,6 +23,52 @@ public static class C_ALittleMoreComplexTraceableTExample
         Console.WriteLine($"Billing success: {success}");
     }
 
+
+    //        public static bool Usage_Imperative_Exceptions()
+    //{
+    //    var logger = new LoggerFactory().CreateLogger("Webshop");
+    //    var userId = 42;
+
+    //    // If you want to keep a single trace across calls, you must create, flow, and close it here.
+    //    using var activity = WebshopActivitySource.StartActivity("Usage");
+    //    activity?.SetTag("user.id", userId);
+
+    //    try
+    //    {
+    //        logger.LogInformation("Fetching cart for user {UserId}", userId);
+    //        var cart = CartService.GetCartItems(userId); // throws if not found/failed
+
+    //        logger.LogInformation("Creating order for user {UserId}", userId);
+    //        var order = OrderService.CreateOrder(cart);  // throws on failure
+
+    //        logger.LogInformation("Charging customer {UserId}", userId);
+    //        var billing = BillingService.ChargeCustomer(order, userId); // throws on failure
+
+    //        activity?.SetStatus(ActivityStatusCode.Ok);
+    //        return billing.Success;
+    //    }
+    //    catch (CartNotFoundException ex)
+    //    {
+    //        logger.LogWarning(ex, "Cart not found for user {UserId}", userId);
+    //        activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+    //        return false;
+    //    }
+    //    catch (PaymentDeclinedException ex)
+    //    {
+    //        logger.LogWarning(ex, "Payment declined for user {UserId}", userId);
+    //        activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+    //        return false;
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        // You must remember to map all other failures consistently.
+    //        logger.LogError(ex, "Unexpected error while processing order for user {UserId}", userId);
+    //        activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+    //        return false;
+    //    }
+    //}
+    //    }
+
     private static class BillingService
     {
         public static IO<bool> ChargeCustomer(string orderId, int userId) =>
